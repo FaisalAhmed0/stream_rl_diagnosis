@@ -12,6 +12,7 @@ from stable_baselines3.common.atari_wrappers import (
     NoopResetEnv,
 )
 import torch.nn.functional as F
+import wandb
 from normalization_wrappers import NormalizeObservation, ScaleReward
 from sparse_init import sparse_init
 
@@ -106,7 +107,7 @@ class StreamQ(nn.Module):
             if torch.sign(delta_bar * delta).item() == -1:
                 print("Overshooting Detected!")
 
-def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_start, exploration_fraction, kappa_value, debug, overshooting_info, render=False):
+def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_start, exploration_fraction, kappa_value, debug, overshooting_info, render=False, track=False, args=None):
     torch.manual_seed(seed); np.random.seed(seed)
     env = gym.make(env_name, render_mode='human') if render else gym.make(env_name)
     env = gym.wrappers.RecordEpisodeStatistics(env)
@@ -123,6 +124,13 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_
     agent = StreamQ(n_actions=env.action_space.n, lr=lr, gamma=gamma, lamda=lamda, epsilon_target=epsilon_target, epsilon_start=epsilon_start, exploration_fraction=exploration_fraction, total_steps=total_steps, kappa_value=kappa_value)
     if debug:
         print("seed: {}".format(seed), "env: {}".format(env.spec.id))
+    if track:
+        wandb.init(
+            project="Stream Q(λ)",
+            mode="online",
+            config=vars(args) if args else {},
+            name=f"Stream Q(λ)_env_{env_name}_seed_{seed}"
+        )
     returns, term_time_steps = [], []
     s, _ = env.reset(seed=seed)
     episode_num = 1
@@ -134,11 +142,22 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_
         if info and "episode" in info:
             if debug:
                 print("Episodic Return: {}, Time Step {}, Episode Number {}, Epsilon {}".format(info['episode']['r'][0], t, episode_num, agent.epsilon))
+            if track:
+                wandb.log(
+                    {
+                        "episodic_return": info['episode']['r'][0],
+                        "episode_length": info['episode']['l'][0],
+                        "epsilon": agent.epsilon,
+                    },
+                    step=t
+                )
             returns.append(info['episode']['r'][0])
             term_time_steps.append(t)
             s, _ = env.reset()
             episode_num += 1
     env.close()
+    if track:
+        wandb.finish()
     save_dir = "data_stream_q_{}_lr{}_gamma{}_lamda{}".format(env.spec.id, lr, gamma, lamda)
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
@@ -160,5 +179,6 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--overshooting_info', action='store_true')
     parser.add_argument('--render', action='store_true')
+    parser.add_argument('--track', type=int, default=0)
     args = parser.parse_args()
-    main(args.env_name, args.seed, args.lr, args.gamma, args.lamda, args.total_steps, args.epsilon_target, args.epsilon_start, args.exploration_fraction, args.kappa_value, args.debug, args.overshooting_info, args.render)
+    main(args.env_name, args.seed, args.lr, args.gamma, args.lamda, args.total_steps, args.epsilon_target, args.epsilon_start, args.exploration_fraction, args.kappa_value, args.debug, args.overshooting_info, args.render, args.track, args)

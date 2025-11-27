@@ -4,6 +4,7 @@ import numpy as np
 import torch.nn as nn
 import gymnasium as gym
 import torch.nn.functional as F
+import wandb
 from optim import ObGD as Optimizer
 from normalization_wrappers import NormalizeObservation, ScaleReward
 from sparse_init import sparse_init
@@ -154,7 +155,7 @@ class StreamTD(nn.Module):
             if torch.sign(delta_bar * delta).item() == -1:
                 print("Overshooting Detected!")
 
-def main(seed, lr, gamma, lamda, total_steps, kappa_value, debug, overshooting_info):
+def main(seed, lr, gamma, lamda, total_steps, kappa_value, debug, overshooting_info, track=False, args=None):
     torch.manual_seed(seed); np.random.seed(seed)
     env = ETTEnvironment()
     env = gym.wrappers.RecordEpisodeStatistics(env)
@@ -164,14 +165,33 @@ def main(seed, lr, gamma, lamda, total_steps, kappa_value, debug, overshooting_i
     agent = StreamTD(n_obs=env.observation_space.shape[0], lr=lr, gamma=gamma, lamda=lamda, kappa_value=kappa_value)
     if debug:
         print("seed: {}".format(seed), "env: {}".format(env.spec.id))
+    if track:
+        wandb.init(
+            project="Stream TD(λ)",
+            mode="online",
+            config=vars(args) if args else {},
+            name=f"Stream TD(λ)_seed_{seed}"
+        )
     s, _ = env.reset()
     cumulants, predictions = [], []
-    for _ in range(total_steps):
+    reward_std = np.sqrt(env.reward_stats.var + 1e-8).squeeze()
+    for step in range(total_steps):
         s_prime, c, terminated, _, _ = env.step(None)
         agent.update_params(s, c, s_prime, terminated, overshooting_info=overshooting_info)
         s = s_prime
-        predictions.append(agent.predict(s) * np.sqrt(env.reward_stats.var + 1e-8).squeeze())
-        cumulants.append(c * np.sqrt(env.reward_stats.var + 1e-8).squeeze())
+        scaled_prediction = agent.predict(s) * reward_std
+        scaled_cumulant = c * reward_std
+        predictions.append(scaled_prediction)
+        cumulants.append(scaled_cumulant)
+        if track:
+            wandb.log(
+                {
+                    "prediction": scaled_prediction,
+                    "cumulant": scaled_cumulant,
+                    "td_error": scaled_prediction - scaled_cumulant,
+                },
+                step=step
+            )
         if terminated:
             s, _ = env.reset()
             break
@@ -203,6 +223,19 @@ def main(seed, lr, gamma, lamda, total_steps, kappa_value, debug, overshooting_i
     plt.ylabel("Normalized Oil Temp.", fontsize=20)
     plt.legend()
     plt.savefig("td_ettm2_end.pdf", bbox_inches='tight')
+    if track:
+        actual_array = np.array(actual_returns[:len(predictions)])
+        prediction_array = np.array(predictions)
+        mse = float(np.mean((prediction_array - actual_array) ** 2))
+        mae = float(np.mean(np.abs(prediction_array - actual_array)))
+        wandb.log(
+            {
+                "prediction_mse": mse,
+                "prediction_mae": mae,
+            },
+            step=len(predictions)
+        )
+        wandb.finish()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Stream TD(λ)')
@@ -214,5 +247,6 @@ if __name__ == '__main__':
     parser.add_argument('--total_steps', type=int, default=68_000)
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--overshooting_info', action='store_true')
+    parser.add_argument('--track', type=int, default=0)
     args = parser.parse_args()
-    main(args.seed, args.lr, args.gamma, args.lamda, args.total_steps, args.kappa_value, args.debug, args.overshooting_info)
+    main(args.seed, args.lr, args.gamma, args.lamda, args.total_steps, args.kappa_value, args.debug, args.overshooting_info, args.track, args)

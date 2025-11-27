@@ -123,6 +123,8 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_
             s, _ = env.reset()
             episode_num += 1
     env.close()
+    if track:
+        wandb.finish()
     save_dir = "data_stream_q_{}_lr{}_gamma{}_lamda{}".format(env.spec.id, lr, gamma, lamda)
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)

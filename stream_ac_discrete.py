@@ -4,6 +4,7 @@ import numpy as np
 import torch.nn as nn
 import gymnasium as gym
 import torch.nn.functional as F
+import wandb
 from torch.distributions import Categorical
 from optim import ObGD as Optimizer
 from time_wrapper import AddTimeInfo
@@ -105,7 +106,7 @@ class StreamAC(nn.Module):
             if torch.sign(delta_bar * delta).item() == -1:
                 print("Overshooting Detected!")
 
-def main(env_name, seed, lr, gamma, lamda, total_steps, entropy_coeff, kappa_policy, kappa_value, debug, overshooting_info, render=False):
+def main(env_name, seed, lr, gamma, lamda, total_steps, entropy_coeff, kappa_policy, kappa_value, debug, overshooting_info, render=False, track=False, args=None):
     torch.manual_seed(seed); np.random.seed(seed)
     env = gym.make(env_name, render_mode='human', max_episode_steps=10_000) if render else gym.make(env_name, max_episode_steps=10_000)
     env = gym.wrappers.FlattenObservation(env)
@@ -116,6 +117,13 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, entropy_coeff, kappa_pol
     agent = StreamAC(n_obs=env.observation_space.shape[0], n_actions=env.action_space.n, lr=lr, gamma=gamma, lamda=lamda, kappa_policy=kappa_policy, kappa_value=kappa_value)
     if debug:
         print("seed: {}".format(seed), "env: {}".format(env.spec.id))
+    if track:
+        wandb.init(
+            project="Stream AC(λ)",
+            mode="online",
+            config=vars(args) if args else {},
+            name=f"Stream AC(λ)_env_{env_name}_seed_{seed}"
+        )
     returns, term_time_steps = [], []
     s, _ = env.reset(seed=seed)
     for t in range(1, total_steps+1):
@@ -126,11 +134,21 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, entropy_coeff, kappa_pol
         if terminated or truncated:
             if debug:
                 print("Episodic Return: {}, Time Step {}".format(info['episode']['r'][0], t))
+            if track:
+                wandb.log(
+                    {
+                        "episodic_return": info['episode']['r'][0],
+                        "episode_length": info['episode']['l'][0],
+                    },
+                    step=t
+                )
             returns.append(info['episode']['r'][0])
             term_time_steps.append(t)
             terminated, truncated = False, False
             s, _ = env.reset()
     env.close()
+    if track:
+        wandb.finish()
     save_dir = "data_stream_ac_{}_lr{}_gamma{}_lamda{}_entropy_coeff{}".format(env.spec.id, lr, gamma, lamda, entropy_coeff)
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
@@ -151,5 +169,6 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--overshooting_info', action='store_true')
     parser.add_argument('--render', action='store_true')
+    parser.add_argument('--track', type=int, default=0)
     args = parser.parse_args()
-    main(args.env_name, args.seed, args.lr, args.gamma, args.lamda, args.total_steps, args.entropy_coeff, args.kappa_policy, args.kappa_value, args.debug, args.overshooting_info, args.render)
+    main(args.env_name, args.seed, args.lr, args.gamma, args.lamda, args.total_steps, args.entropy_coeff, args.kappa_policy, args.kappa_value, args.debug, args.overshooting_info, args.render, args.track, args)
