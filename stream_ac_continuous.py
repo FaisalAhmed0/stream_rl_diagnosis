@@ -104,12 +104,21 @@ class StreamAC(nn.Module):
         self.optimizer_policy.step(delta.item(), reset=done)
         self.optimizer_value.step(delta.item(), reset=done)
 
+        metrics = {
+            "training/value_output": value_output,
+            "training/td_target": td_target,
+            "training/delta": delta,
+            "training/log_prob_pi": log_prob_pi,
+            "training/entropy_pi": entropy_pi
+        }
+
         if overshooting_info:
             v_s, v_prime = self.v(s), self.v(s_prime)
             td_target = r + self.gamma * v_prime * done_mask
             delta_bar = td_target - v_s
             if torch.sign(delta_bar * delta).item() == -1:
                 print("Overshooting Detected!")
+        return metrics
 
 def main(env_name, seed, lr, gamma, lamda, total_steps, entropy_coeff, kappa_policy, kappa_value, debug, overshooting_info, render=False, track=False, args=None):
     torch.manual_seed(seed); np.random.seed(seed)
@@ -135,17 +144,19 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, entropy_coeff, kappa_pol
     for t in range(1, total_steps+1):
         a = agent.sample_action(s)
         s_prime, r, terminated, truncated, info = env.step(a)
-        agent.update_params(s, a, r, s_prime,  terminated or truncated, entropy_coeff, overshooting_info)
+        metrics = agent.update_params(s, a, r, s_prime,  terminated or truncated, entropy_coeff, overshooting_info)
         s = s_prime
         if terminated or truncated:
             if debug:
                 print("Episodic Return: {}, Time Step {}".format(info['episode']['r'][0], t))
             if track:
+                logs = {
+                        "training/episodic_return": info['episode']['r'][0],
+                        "training/episode_length": info['episode']['l'][0],
+                    }
+                metrics.update(logs)
                 wandb.log(
-                    {
-                        "episodic_return": info['episode']['r'][0],
-                        "episode_length": info['episode']['l'][0],
-                    },
+                    metrics,
                     step=t
                 )
             returns.append(info['episode']['r'][0])

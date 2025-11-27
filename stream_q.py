@@ -77,6 +77,11 @@ class StreamQ(nn.Module):
         self.optimizer.zero_grad()
         q_output.backward()
         self.optimizer.step(delta.item(), reset=(done or is_nongreedy))
+        metrics = {
+            "training/q_output": q_output,
+            "training/td_target": td_target,
+            "training/delta": delta
+        }
 
         if overshooting_info:
             max_q_s_prime_a_prime = torch.max(self.q(s_prime), dim=-1).values
@@ -84,6 +89,7 @@ class StreamQ(nn.Module):
             delta_bar = td_target - self.q(s)[a]
             if torch.sign(delta_bar * delta).item() == -1:
                 print("Overshooting Detected!")
+        return metrics
 
 def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_start, exploration_fraction, kappa_value, debug, overshooting_info, render=False, track=False, args=None):
     torch.manual_seed(seed); np.random.seed(seed)
@@ -109,14 +115,17 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_
     for t in range(1, total_steps+1):
         a, is_nongreedy = agent.sample_action(s)
         s_prime, r, terminated, truncated, info = env.step(a)
-        agent.update_params(s, a, r, s_prime, terminated or truncated, is_nongreedy, overshooting_info)
+        metrics = agent.update_params(s, a, r, s_prime, terminated or truncated, is_nongreedy, overshooting_info)
         s = s_prime
         if terminated or truncated:
             if debug:
                 print("Episodic Return: {}, Time Step {}, Episode Number {}, Epsilon {}".format(info['episode']['r'][0], t, episode_num, agent.epsilon))
             if track:
-                logs = {"epidoic_return":info['episode']['r'][0], "epslion": agent.epsilon}
-                wandb.log(logs, step=t)
+                logs = {"training/epidoic_return":info['episode']['r'][0],
+                        "training/epslion": agent.epsilon,
+                        "training/episode_length": info['episode']['l'][0],}
+                metrics.update(logs)
+                wandb.log(metrics, step=t)
             returns.append(info['episode']['r'][0])
             term_time_steps.append(t)
             terminated, truncated = False, False
