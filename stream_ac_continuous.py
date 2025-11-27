@@ -11,19 +11,23 @@ from normalization_wrappers import NormalizeObservation, ScaleReward
 from sparse_init import sparse_init
 import wandb
 
-def initialize_weights(m):
-    if isinstance(m, nn.Linear):
-        ## Sparse initilization
-        sparse_init(m.weight, sparsity=0.9)
-        m.bias.data.fill_(0.0)
+def create_spare_initializer(sparsity=0.9):
+    def initialize_weights(m):
+        if isinstance(m, nn.Linear):
+            ## Sparse initilization
+            # import pdb;pdb.set_trace()
+            sparse_init(m.weight, sparsity=sparsity)
+            m.bias.data.fill_(0.0)
+    return initialize_weights
 
 class Actor(nn.Module):
-    def __init__(self, n_obs=11, n_actions=3, hidden_size=128):
+    def __init__(self, n_obs=11, n_actions=3, hidden_size=128, sparsity=0.9):
         super(Actor, self).__init__()
         self.fc_layer   = nn.Linear(n_obs, hidden_size)
         self.hidden_layer = nn.Linear(hidden_size, hidden_size)
         self.linear_mu = nn.Linear(hidden_size, n_actions)
         self.linear_std = nn.Linear(hidden_size, n_actions)
+        initialize_weights = create_spare_initializer(sparsity)
         self.apply(initialize_weights)
 
     def forward(self, x):
@@ -39,11 +43,12 @@ class Actor(nn.Module):
         return mu, std
 
 class Critic(nn.Module):
-    def __init__(self, n_obs=11, hidden_size=128):
+    def __init__(self, n_obs=11, hidden_size=128, sparsity=0.9):
         super(Critic, self).__init__()
         self.fc_layer   = nn.Linear(n_obs, hidden_size)
         self.hidden_layer  = nn.Linear(hidden_size, hidden_size)
         self.linear_layer  = nn.Linear(hidden_size, 1)
+        initialize_weights = create_spare_initializer(sparsity)
         self.apply(initialize_weights)
 
     def forward(self, x):
@@ -56,11 +61,11 @@ class Critic(nn.Module):
         return self.linear_layer(x)
 
 class StreamAC(nn.Module):
-    def __init__(self, n_obs=11, n_actions=3, hidden_size=128, lr=1.0, gamma=0.99, lamda=0.8, kappa_policy=3.0, kappa_value=2.0):
+    def __init__(self, n_obs=11, n_actions=3, hidden_size=128, lr=1.0, gamma=0.99, lamda=0.8, kappa_policy=3.0, kappa_value=2.0, sparsity=0.9):
         super(StreamAC, self).__init__()
         self.gamma = gamma
-        self.policy_net = Actor(n_obs=n_obs, n_actions=n_actions, hidden_size=hidden_size)
-        self.value_net = Critic(n_obs=n_obs, hidden_size=hidden_size)
+        self.policy_net = Actor(n_obs=n_obs, n_actions=n_actions, hidden_size=hidden_size, sparsity=sparsity)
+        self.value_net = Critic(n_obs=n_obs, hidden_size=hidden_size, sparsity=sparsity)
         self.optimizer_policy = Optimizer(self.policy_net.parameters(), lr=lr, gamma=gamma, lamda=lamda, kappa=kappa_policy)
         self.optimizer_value = Optimizer(self.value_net.parameters(), lr=lr, gamma=gamma, lamda=lamda, kappa=kappa_value)
 
@@ -115,7 +120,7 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, entropy_coeff, kappa_pol
     env = ScaleReward(env, gamma=gamma)
     env = NormalizeObservation(env)
     env = AddTimeInfo(env)
-    agent = StreamAC(n_obs=env.observation_space.shape[0], n_actions=env.action_space.shape[0], lr=lr, gamma=gamma, lamda=lamda, kappa_policy=kappa_policy, kappa_value=kappa_value)
+    agent = StreamAC(n_obs=env.observation_space.shape[0], n_actions=env.action_space.shape[0], lr=lr, gamma=gamma, lamda=lamda, kappa_policy=kappa_policy, kappa_value=kappa_value, sparsity=args.sparsity)
     if debug:
         print("seed: {}".format(seed), "env: {}".format(env.spec.id))
     if track:
@@ -172,5 +177,6 @@ if __name__ == '__main__':
     parser.add_argument('--render', action='store_true')
     # track with wandb
     parser.add_argument('--track', type=int, default=0)
+    parser.add_argument('--sparsity', type=float, default=0.9, help="Amount of sparsity in the neural network intialization")
     args = parser.parse_args()
     main(args.env_name, args.seed, args.lr, args.gamma, args.lamda, args.total_steps, args.entropy_coeff, args.kappa_policy, args.kappa_value, args.debug, args.overshooting_info, args.render, args.track, args)

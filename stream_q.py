@@ -101,7 +101,7 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_
             project="Stream Q(λ)",
             mode="online",
             config=vars(args),
-            name=f"Stream Q(λ)_env_name_{env_name}_seed_{seed}"
+            name=f"Stream Q(λ)_env_name_{env_name}_seed_{seed}_sparsity_{args.sparsity}"
         )
     returns, term_time_steps = [], []
     s, _ = env.reset(seed=seed)
@@ -148,5 +148,7 @@ if __name__ == '__main__':
     parser.add_argument('--render', action='store_true')
     # track with wandb
     parser.add_argument('--track', type=int, default=0)
+    ## For empirical analysis
+    parser.add_argument('--sparsity', type=float, default=0.9, help="Amount of sparsity in the neural network intialization")
     args = parser.parse_args()
     main(args.env_name, args.seed, args.lr, args.gamma, args.lamda, args.total_steps, args.epsilon_target, args.epsilon_start, args.exploration_fraction, args.kappa_value, args.debug, args.overshooting_info, args.render, args.track, args)
