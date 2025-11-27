@@ -1,5 +1,10 @@
 # Streaming Deep Reinforcement Learning
 
+# RL class project 
+
+to use wandb use add flag ```--track=1```, you need to have a wandb account check the guide in the https://docs.wandb.ai/models/quickstart
+
+
 <p align="center">
   <img src="assets/video_grid.gif">
 </p>
