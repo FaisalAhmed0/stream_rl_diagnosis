@@ -21,51 +21,71 @@ def create_spare_initializer(sparsity=0.9):
     return initialize_weights
 
 class Actor(nn.Module):
-    def __init__(self, n_obs=11, n_actions=3, hidden_size=128, sparsity=0.9):
+    def __init__(self, n_obs=11, n_actions=3, hidden_size=128, num_layers=2, sparsity=0.9):
         super(Actor, self).__init__()
-        self.fc_layer   = nn.Linear(n_obs, hidden_size)
-        self.hidden_layer = nn.Linear(hidden_size, hidden_size)
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+
+        self.fc_in  = nn.Linear(n_obs, hidden_size)
+
+        self.hidden_layers = nn.ModuleList(
+            [nn.Linear(hidden_size, hidden_size) for i in range(num_layers - 1)]
+        )
+
         self.linear_mu = nn.Linear(hidden_size, n_actions)
         self.linear_std = nn.Linear(hidden_size, n_actions)
+
         initialize_weights = create_spare_initializer(sparsity)
         self.apply(initialize_weights)
 
     def forward(self, x):
-        x = self.fc_layer(x)
+        x = self.fc_in(x)
         x = F.layer_norm(x, x.size())
         x = F.leaky_relu(x)
-        x = self.hidden_layer(x)
-        x = F.layer_norm(x, x.size())
-        x = F.leaky_relu(x)
+
+        for layer in self.hidden_layers:
+            x = layer(x)
+            x = F.layer_norm(x, x.size())
+            x = F.leaky_relu(x)
+
         mu = self.linear_mu(x)
         pre_std = self.linear_std(x)
         std = F.softplus(pre_std)
         return mu, std
 
 class Critic(nn.Module):
-    def __init__(self, n_obs=11, hidden_size=128, sparsity=0.9):
+    def __init__(self, n_obs=11, hidden_size=128, num_layers=2, sparsity=0.9):
         super(Critic, self).__init__()
-        self.fc_layer   = nn.Linear(n_obs, hidden_size)
-        self.hidden_layer  = nn.Linear(hidden_size, hidden_size)
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+
+        self.fc_in   = nn.Linear(n_obs, hidden_size)
+        self.hidden_layers = nn.ModuleList(
+            [nn.Linear(hidden_size, hidden_size) for i in range(num_layers - 1)]
+        )
+
         self.linear_layer  = nn.Linear(hidden_size, 1)
         initialize_weights = create_spare_initializer(sparsity)
         self.apply(initialize_weights)
 
     def forward(self, x):
-        x = self.fc_layer(x)
+        x = self.fc_in(x)
         x = F.layer_norm(x, x.size())
         x = F.leaky_relu(x)
-        x = self.hidden_layer(x)      
-        x = F.layer_norm(x, x.size())
-        x = F.leaky_relu(x)
+
+        for layer in self.hidden_layers:
+            x = layer(x)
+            x = F.layer_norm(x, x.size())
+            x = F.leaky_relu(x)
+        
         return self.linear_layer(x)
 
 class StreamAC(nn.Module):
-    def __init__(self, n_obs=11, n_actions=3, hidden_size=128, lr=1.0, gamma=0.99, lamda=0.8, kappa_policy=3.0, kappa_value=2.0, sparsity=0.9):
+    def __init__(self, n_obs=11, n_actions=3, hidden_size=128, num_layers=2, lr=1.0, gamma=0.99, lamda=0.8, kappa_policy=3.0, kappa_value=2.0, sparsity=0.9):
         super(StreamAC, self).__init__()
         self.gamma = gamma
-        self.policy_net = Actor(n_obs=n_obs, n_actions=n_actions, hidden_size=hidden_size, sparsity=sparsity)
-        self.value_net = Critic(n_obs=n_obs, hidden_size=hidden_size, sparsity=sparsity)
+        self.policy_net = Actor(n_obs=n_obs, n_actions=n_actions, hidden_size=hidden_size, num_layers=num_layers, sparsity=sparsity)
+        self.value_net = Critic(n_obs=n_obs, hidden_size=hidden_size, num_layers=num_layers, sparsity=sparsity)
         self.optimizer_policy = Optimizer(self.policy_net.parameters(), lr=lr, gamma=gamma, lamda=lamda, kappa=kappa_policy)
         self.optimizer_value = Optimizer(self.value_net.parameters(), lr=lr, gamma=gamma, lamda=lamda, kappa=kappa_value)
 
@@ -120,7 +140,7 @@ class StreamAC(nn.Module):
                 print("Overshooting Detected!")
         return metrics
 
-def main(env_name, seed, lr, gamma, lamda, total_steps, entropy_coeff, kappa_policy, kappa_value, debug, overshooting_info, render=False, track=False, args=None):
+def main(env_name, seed, lr, hidden_size, num_layers, gamma, lamda, total_steps, entropy_coeff, kappa_policy, kappa_value, debug, overshooting_info, render=False, track=False, args=None):
     torch.manual_seed(seed); np.random.seed(seed)
     env = gym.make(env_name, render_mode='human') if render else gym.make(env_name)
     env = gym.wrappers.FlattenObservation(env)
@@ -129,7 +149,8 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, entropy_coeff, kappa_pol
     env = ScaleReward(env, gamma=gamma)
     env = NormalizeObservation(env)
     env = AddTimeInfo(env)
-    agent = StreamAC(n_obs=env.observation_space.shape[0], n_actions=env.action_space.shape[0], lr=lr, gamma=gamma, lamda=lamda, kappa_policy=kappa_policy, kappa_value=kappa_value, sparsity=args.sparsity)
+    agent = StreamAC(n_obs=env.observation_space.shape[0], n_actions=env.action_space.shape[0], hidden_size=hidden_size,
+    num_layers=num_layers, lr=lr, gamma=gamma, lamda=lamda, kappa_policy=kappa_policy, kappa_value=kappa_value, sparsity=args.sparsity)
     if debug:
         print("seed: {}".format(seed), "env: {}".format(env.spec.id))
     if track:
@@ -137,7 +158,7 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, entropy_coeff, kappa_pol
             project="Stream AC(λ)",
             mode="online",
             config=vars(args) if args else {},
-            name=f"Stream AC(λ)_env_{env_name}_seed_{seed}"
+            name=f"Stream AC(λ))_hs_{args.hidden_size}_nl_{args.num_layers}_env_{env_name}_seed_{seed}"
         )
     returns, term_time_steps = [], []
     s, _ = env.reset(seed=seed)
@@ -166,7 +187,7 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, entropy_coeff, kappa_pol
     env.close()
     if track:
         wandb.finish()
-    save_dir = "data_stream_ac_{}_lr{}_gamma{}_lamda{}_entropy_coeff{}".format(env.spec.id, lr, gamma, lamda, entropy_coeff)
+    save_dir = "data_stream_ac_{}_h{}_nl{}_lr{}_gamma{}_lamda{}_entropy_coeff{}".format(env.spec.id, hidden_size, num_layers, lr, gamma, lamda, entropy_coeff)
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     with open(os.path.join(save_dir, "seed_{}.pkl".format(seed)), "wb") as f:
@@ -177,6 +198,8 @@ if __name__ == '__main__':
     parser.add_argument('--env_name', type=str, default='HalfCheetah-v4')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--lr', type=float, default=1.0)
+    parser.add_argument('--hidden_size', type=int, default=128)
+    parser.add_argument('--num_layers', type=int, default=2)
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--lamda', type=float, default=0.8)
     parser.add_argument('--total_steps', type=int, default=2_000_000)
@@ -190,4 +213,4 @@ if __name__ == '__main__':
     parser.add_argument('--track', type=int, default=0)
     parser.add_argument('--sparsity', type=float, default=0.9, help="Amount of sparsity in the neural network intialization")
     args = parser.parse_args()
-    main(args.env_name, args.seed, args.lr, args.gamma, args.lamda, args.total_steps, args.entropy_coeff, args.kappa_policy, args.kappa_value, args.debug, args.overshooting_info, args.render, args.track, args)
+    main(args.env_name, args.seed, args.lr, args.hidden_size, args.num_layers, args.gamma, args.lamda, args.total_steps, args.entropy_coeff, args.kappa_policy, args.kappa_value, args.debug, args.overshooting_info, args.render, args.track, args)
