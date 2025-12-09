@@ -28,7 +28,7 @@ def avg_return_curve(x, y, stride, total_steps):
         stderr_ret[i] = np.std(avg_rets_per_run) / np.sqrt(num_runs)
     return steps, avg_ret, stderr_ret
 
-def main(data_dir, int_space, total_steps):
+def main(data_dir, hidden_size, num_layers, int_space, total_steps):
     plt.figure(figsize=(8, 5))
     all_termination_time_steps, all_episodic_returns, env_name = [], [], ''
     for file in os.listdir(data_dir):
@@ -44,14 +44,16 @@ def main(data_dir, int_space, total_steps):
 
     plt.xlabel("Time Step", fontsize=14)
     plt.ylabel(f"Average Episodic Return", fontsize=14)
-    plt.title(r"Stream AC(0.8)" + f" in {env_name}")
-    plt.savefig(f"{env_name}.pdf")
+    plt.title(r"Stream AC(0.8)" + f" in {env_name} with hidden size {hidden_size} and {num_layers} layers")
+    plt.savefig(f"{env_name}_h{hidden_size}_nl{num_layers}.png")
 
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_dir', type=str, default='data_stream_ac_Ant-v4_lr1.0_gamma0.99_lamda0.8_entropy_coeff0.01')
+    parser.add_argument('--hidden_size', type=int, default=32)
+    parser.add_argument('--num_layers', type=int, default=32)
     parser.add_argument('--int_space', type=int, default=50_000)
     parser.add_argument('--total_steps', type=int, default=2_000_000)
     args = parser.parse_args()
-    main(args.data_dir, args.int_space, args.total_steps)
+    main(args.data_dir, args.hidden_size, args.num_layers, args.int_space, args.total_steps)

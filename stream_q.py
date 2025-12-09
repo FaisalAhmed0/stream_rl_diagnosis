@@ -21,7 +21,7 @@ def initialize_weights(m):
         m.bias.data.fill_(0.0)
 
 class StreamQ(nn.Module):
-    def __init__(self, n_obs=11, n_actions=3, hidden_size=32, lr=1.0, epsilon_target=0.01, epsilon_start=1.0, exploration_fraction=0.1, total_steps=1_000_000, gamma=0.99, lamda=0.8, kappa_value=2.0):
+    def __init__(self, n_obs=11, n_actions=3, hidden_size=32, num_layers=3, lr=1.0, epsilon_target=0.01, epsilon_start=1.0, exploration_fraction=0.1, total_steps=1_000_000, gamma=0.99, lamda=0.8, kappa_value=2.0):
         super(StreamQ, self).__init__()
         self.n_actions = n_actions
         self.gamma = gamma
@@ -31,20 +31,25 @@ class StreamQ(nn.Module):
         self.exploration_fraction = exploration_fraction
         self.total_steps = total_steps
         self.time_step = 0
-        self.fc1_v   = nn.Linear(n_obs, hidden_size)
-        self.hidden_v  = nn.Linear(hidden_size, hidden_size)
-        self.fc_v  = nn.Linear(hidden_size, n_actions)
+
+        self.fc_in = nn.Linear(n_obs, hidden_size)
+        self.hidden_layers = nn.ModuleList(
+            [nn.Linear(hidden_size, hidden_size) for i in range(num_layers - 1)]
+        )
+        self.fc_out = nn.Linear(hidden_size, n_actions)
+
         self.apply(initialize_weights)
         self.optimizer = Optimizer(list(self.parameters()), lr=lr, gamma=gamma, lamda=lamda, kappa=kappa_value)
 
     def q(self, x):
-        x = self.fc1_v(x)
+        x = self.fc_in(x)
         x = F.layer_norm(x, x.size())
         x = F.leaky_relu(x)
-        x = self.hidden_v(x)
-        x = F.layer_norm(x, x.size())
-        x = F.leaky_relu(x)
-        return self.fc_v(x)
+        for layer in self.hidden_layers:
+            x = layer(x)
+            x = F.layer_norm(x, x.size())
+            x = F.leaky_relu(x)
+        return self.fc_out(x)
 
     def sample_action(self, s):
         self.time_step += 1
@@ -91,7 +96,7 @@ class StreamQ(nn.Module):
                 print("Overshooting Detected!")
         return metrics
 
-def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_start, exploration_fraction, kappa_value, debug, overshooting_info, render=False, track=False, args=None):
+def main(env_name, seed, lr, hidden_size, num_layers, gamma, lamda, total_steps, epsilon_target, epsilon_start, exploration_fraction, kappa_value, debug, overshooting_info, render=False, track=False, args=None):
     torch.manual_seed(seed); np.random.seed(seed)
     env = gym.make(env_name, render_mode='human', max_episode_steps=10_000) if render else gym.make(env_name, max_episode_steps=10_000)
     env = gym.wrappers.FlattenObservation(env)
@@ -99,7 +104,7 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_
     env = ScaleReward(env, gamma=gamma)
     env = NormalizeObservation(env)
     env = AddTimeInfo(env)
-    agent = StreamQ(n_obs=env.observation_space.shape[0], n_actions=env.action_space.n, lr=lr, gamma=gamma, lamda=lamda, epsilon_target=epsilon_target, epsilon_start=epsilon_start, exploration_fraction=exploration_fraction, total_steps=total_steps, kappa_value=kappa_value)
+    agent = StreamQ(n_obs=env.observation_space.shape[0], n_actions=env.action_space.n, lr=lr, hidden_size=hidden_size, num_layers=num_layers, gamma=gamma, lamda=lamda, epsilon_target=epsilon_target, epsilon_start=epsilon_start, exploration_fraction=exploration_fraction, total_steps=total_steps, kappa_value=kappa_value)
     if debug:
         print("seed: {}".format(seed), "env: {}".format(env.spec.id))
     if track:
@@ -107,7 +112,7 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_
             project="Stream Q(λ)",
             mode="online",
             config=vars(args),
-            name=f"Stream Q(λ)_env_name_{env_name}_seed_{seed}_sparsity_{args.sparsity}"
+            name=f"Stream Q(λ)_hs_{args.hidden_size}_nl_{args.num_layers}_env_name_{env_name}_seed_{seed}_sparsity_{args.sparsity}"
         )
     returns, term_time_steps = [], []
     s, _ = env.reset(seed=seed)
@@ -134,7 +139,7 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_
     env.close()
     if track:
         wandb.finish()
-    save_dir = "data_stream_q_{}_lr{}_gamma{}_lamda{}".format(env.spec.id, lr, gamma, lamda)
+    save_dir = f"data_stream_q_{env.spec.id}_h{hidden_size}_nl{num_layers}_lr{lr}_gamma{gamma}_lamda{lamda}"
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     with open(os.path.join(save_dir, "seed_{}.pkl".format(seed)), "wb") as f:
@@ -145,6 +150,8 @@ if __name__ == '__main__':
     parser.add_argument('--env_name', type=str, default='CartPole-v1')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--lr', type=float, default=1.0)
+    parser.add_argument('--hidden_size', type=int, default=32)
+    parser.add_argument('--num_layers', type=int, default=2)
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--lamda', type=float, default=0.8)
     parser.add_argument('--epsilon_target', type=float, default=0.01)
@@ -160,4 +167,4 @@ if __name__ == '__main__':
     ## For empirical analysis
     parser.add_argument('--sparsity', type=float, default=0.9, help="Amount of sparsity in the neural network intialization")
     args = parser.parse_args()
-    main(args.env_name, args.seed, args.lr, args.gamma, args.lamda, args.total_steps, args.epsilon_target, args.epsilon_start, args.exploration_fraction, args.kappa_value, args.debug, args.overshooting_info, args.render, args.track, args)
+    main(args.env_name, args.seed, args.lr, args.hidden_size, args.num_layers, args.gamma, args.lamda, args.total_steps, args.epsilon_target, args.epsilon_start, args.exploration_fraction, args.kappa_value, args.debug, args.overshooting_info, args.render, args.track, args)
