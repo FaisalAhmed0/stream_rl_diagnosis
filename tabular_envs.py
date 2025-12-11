@@ -220,7 +220,7 @@ class CliffwalkEnv(TabularEnv):
         agent will be transported to the start state.
     """
 
-    def __init__(self, num_states=3, transition_noise=0.0):
+    def __init__(self, num_states=16, transition_noise=0.01):
         super(CliffwalkEnv, self).__init__(num_states, 2, {0: 1.0})
         self.transition_noise = transition_noise
 
@@ -394,6 +394,7 @@ class MountainCar(TabularEnv):
         self._vel_step = (self.max_vel - self.min_vel) / self._vel_disc
 
         initial_state = self.to_state_id(MountainCarState(-0.5, 0))
+        print(initial_state)
         super(MountainCar, self).__init__(self._pos_disc * self._vel_disc, 3, {initial_state: 1.0})
         self.observation_space = gym.spaces.Box(
             low=np.array([self.min_pos, -self.max_vel]), 

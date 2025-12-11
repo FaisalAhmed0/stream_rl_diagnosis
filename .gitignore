@@ -1,2 +1,5 @@
 __pycache__
 wandb
+run_tabular_q_learning
+.gitignore
+train
