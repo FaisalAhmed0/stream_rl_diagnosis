@@ -18,6 +18,7 @@ def q_learning(env, num_episodes, epsilon=1, decay_epsilon=True, duration=1, alp
     
     num_states = env.num_states
     num_actions = env.num_actions
+    starting_epsilon = epsilon
     Q = np.zeros((num_states, num_actions))
     # Q-learning algorithm
     global_step = 0
@@ -26,23 +27,34 @@ def q_learning(env, num_episodes, epsilon=1, decay_epsilon=True, duration=1, alp
         state = env.get_state()
         Q_now = np.copy(Q)
         done = False
-        sum_of_rewards = 0
-        episode_steps = 0
+        sum_of_rewards = 0.0
+        episode_steps = 0.0
+        new_good_reward = False
         while True:
             action = eps_greedy_policy(Q, state, epsilon)
             _, reward, done, info = env.step(action)
-            next_state = env.get_state()
-            Q[state, action] = ((1-alpha)*Q[state, action]) + alpha*(reward + ~done * gamma * Q[next_state].max())
-            state = next_state
             sum_of_rewards += reward
-            if done: break
+            next_state = env.get_state()
+            Q[state, action] = ((1-alpha)*Q[state, action]) + alpha*(reward + (1 - int(done)) * gamma * Q[next_state].max())
+            if debug and reward > 0:
+                print("========= positive reward ==========")
+                print(Q[state, action], sum_of_rewards)
+            #     new_good_reward = True
+            state = next_state
+            if done:
+                # print(sum_of_rewards)
+                break
             global_step += 1
             episode_steps +=1 
             if episode_steps >= max_episode_steps:
+                # print(sum_of_rewards)
                 break
         if decay_epsilon:
-            epsilon = linear_schedule(epsilon, 0.01, duration, episode)
+            epsilon = linear_schedule(starting_epsilon, 0.01, duration, episode+1)
         Q_after = np.copy(Q)
+        # if new_good_reward:
+        #     import pdb;pdb.set_trace()
+        #     diff = np.max(np.abs(Q_now - Q_after))
         diff = np.max(np.abs(Q_now - Q_after))
         if debug:
             debug_str = f"Episode: {episode+1}, epsilon: {epsilon}, return: {sum_of_rewards}, diff: {diff}"
@@ -54,8 +66,9 @@ if __name__ == "__main__":
     # env = InvertedPendulum(state_discretization=64, action_discretization=5)
     env = MountainCar()
     ## Q-learning configs
-    num_episodes = 10000
+    num_episodes = 100000
     eps_frac = 0.8
     epsilon = 1.0
-    q_learning(env, num_episodes, epsilon=epsilon, decay_epsilon=True, duration=eps_frac*num_episodes, debug=True)
+    q = q_learning(env, num_episodes, epsilon=epsilon, decay_epsilon=True, duration=eps_frac*num_episodes, debug=True)
+    print(q)
     # import pdb;pdb.set_trace()
