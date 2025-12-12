@@ -8,6 +8,7 @@ from optim import ObGD as Optimizer
 from time_wrapper import AddTimeInfo
 from normalization_wrappers import NormalizeObservation, ScaleReward
 from sparse_init import sparse_init
+from tabular_envs import CliffwalkEnv, InvertedPendulum, MountainCar, GymnasiumTabularWrapper
 import wandb 
 
 
@@ -21,8 +22,9 @@ def initialize_weights(m):
         m.bias.data.fill_(0.0)
 
 class StreamQ(nn.Module):
-    def __init__(self, n_obs=11, n_actions=3, hidden_size=32, lr=1.0, epsilon_target=0.01, epsilon_start=1.0, exploration_fraction=0.1, total_steps=1_000_000, gamma=0.99, lamda=0.8, kappa_value=2.0):
+    def __init__(self, n_obs=11, n_actions=3, hidden_size=32, lr=1.0, epsilon_target=0.01, epsilon_start=1.0, exploration_fraction=0.1, total_steps=1_000_000, gamma=0.99, lamda=0.8, kappa_value=2.0, layer_norm=1, args=None):
         super(StreamQ, self).__init__()
+        assert args is not None
         self.n_actions = n_actions
         self.gamma = gamma
         self.epsilon_start = epsilon_start
@@ -31,18 +33,19 @@ class StreamQ(nn.Module):
         self.exploration_fraction = exploration_fraction
         self.total_steps = total_steps
         self.time_step = 0
+        self.layer_norm = layer_norm
         self.fc1_v   = nn.Linear(n_obs, hidden_size)
         self.hidden_v  = nn.Linear(hidden_size, hidden_size)
         self.fc_v  = nn.Linear(hidden_size, n_actions)
         self.apply(initialize_weights)
-        self.optimizer = Optimizer(list(self.parameters()), lr=lr, gamma=gamma, lamda=lamda, kappa=kappa_value)
+        self.optimizer = Optimizer(list(self.parameters()), lr=lr, gamma=gamma, lamda=args.eligibility_trace_lamda, kappa=kappa_value, adaptive_step_size=args.adaptive_step_size, bound_delta=args.bound_delta)
 
     def q(self, x):
         x = self.fc1_v(x)
-        x = F.layer_norm(x, x.size())
+        x = F.layer_norm(x, x.size()) if self.layer_norm else nn.Identity()(x)
         x = F.leaky_relu(x)
         x = self.hidden_v(x)
-        x = F.layer_norm(x, x.size())
+        x = F.layer_norm(x, x.size()) if self.layer_norm else  nn.Identity()(x)
         x = F.leaky_relu(x)
         return self.fc_v(x)
 
@@ -91,23 +94,35 @@ class StreamQ(nn.Module):
                 print("Overshooting Detected!")
         return metrics
 
-def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_start, exploration_fraction, kappa_value, debug, overshooting_info, render=False, track=False, args=None):
+def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_start, exploration_fraction, kappa_value, debug, overshooting_info, render=False, track=False, args=None, tabular_env=False, layer_norm=1):
     torch.manual_seed(seed); np.random.seed(seed)
-    env = gym.make(env_name, render_mode='human', max_episode_steps=10_000) if render else gym.make(env_name, max_episode_steps=10_000)
-    env = gym.wrappers.FlattenObservation(env)
-    env = gym.wrappers.RecordEpisodeStatistics(env)
-    env = ScaleReward(env, gamma=gamma)
-    env = NormalizeObservation(env)
-    env = AddTimeInfo(env)
-    agent = StreamQ(n_obs=env.observation_space.shape[0], n_actions=env.action_space.n, lr=lr, gamma=gamma, lamda=lamda, epsilon_target=epsilon_target, epsilon_start=epsilon_start, exploration_fraction=exploration_fraction, total_steps=total_steps, kappa_value=kappa_value)
+    if tabular_env:
+        env = eval(env_name)()
+        env = GymnasiumTabularWrapper(env)
+        # env = gym.make(env_name, render_mode='human', max_episode_steps=200) if render else gym.make(env_name, max_episode_steps=200)
+        # env = gym.wrappers.FlattenObservation(env)
+        env = gym.wrappers.RecordEpisodeStatistics(env)
+        if args.reward_rms:
+            env = ScaleReward(env, gamma=gamma)
+        # env = NormalizeObservation(env)
+        env = AddTimeInfo(env)
+    else:
+        env = gym.make(env_name, render_mode='human', max_episode_steps=10_000) if render else gym.make(env_name, max_episode_steps=10_000)
+        env = gym.wrappers.FlattenObservation(env)
+        env = gym.wrappers.RecordEpisodeStatistics(env)
+        env = ScaleReward(env, gamma=gamma)
+        env = NormalizeObservation(env)
+        env = AddTimeInfo(env)
+    agent = StreamQ(n_obs=env.observation_space.shape[0], n_actions=env.action_space.n, lr=lr, gamma=gamma, lamda=lamda, epsilon_target=epsilon_target, epsilon_start=epsilon_start, exploration_fraction=exploration_fraction, total_steps=total_steps, kappa_value=kappa_value, layer_norm=layer_norm, args=args)
     if debug:
         print("seed: {}".format(seed), "env: {}".format(env.spec.id))
     if track:
         wandb.init(
-            project="Stream Q(λ)",
+            project="Stream Q(λ)_tabular_envs",
             mode="online",
             config=vars(args),
-            name=f"Stream Q(λ)_env_name_{env_name}_seed_{seed}_sparsity_{args.sparsity}"
+            name=f"Stream Q(λ)_env_name_{env_name}_seed_{seed}_sparsity_{args.sparsity}",
+            entity="streaming-x-diagnosis"
         )
     returns, term_time_steps = [], []
     s, _ = env.reset(seed=seed)
@@ -143,6 +158,7 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Stream Q(λ)')
     parser.add_argument('--env_name', type=str, default='CartPole-v1')
+    parser.add_argument('--tabular_env', action='store_true')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--lr', type=float, default=1.0)
     parser.add_argument('--gamma', type=float, default=0.99)
@@ -159,5 +175,14 @@ if __name__ == '__main__':
     parser.add_argument('--track', type=int, default=0)
     ## For empirical analysis
     parser.add_argument('--sparsity', type=float, default=0.9, help="Amount of sparsity in the neural network intialization")
+    parser.add_argument('--layer_norm', type=int, default=1)
+    parser.add_argument('--reward_rms', type=int, default=1)
+    parser.add_argument('--adaptive_step_size', type=int, default=1)
+    parser.add_argument('--bound_delta', type=int, default=1)
+    parser.add_argument('--eligibility_trace_lamda', type=float, default=0.8) # if set to zero it is the td loss, while 1 is similar to MC estimate
+    # layer norom 
+    # optimizer 
+    # reward normalization 
+
     args = parser.parse_args()
-    main(args.env_name, args.seed, args.lr, args.gamma, args.lamda, args.total_steps, args.epsilon_target, args.epsilon_start, args.exploration_fraction, args.kappa_value, args.debug, args.overshooting_info, args.render, args.track, args)
+    main(args.env_name, args.seed, args.lr, args.gamma, args.lamda, args.total_steps, args.epsilon_target, args.epsilon_start, args.exploration_fraction, args.kappa_value, args.debug, args.overshooting_info, args.render, args.track, args, tabular_env=args.tabular_env, layer_norm=args.layer_norm)

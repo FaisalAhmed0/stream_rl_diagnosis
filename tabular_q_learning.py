@@ -15,7 +15,7 @@ class Args:
     epsilon_start: float = 1.0
     epslion_end: float = 0.01
     alpha_start: float = 1.0
-    alpha_end: float = 0.1
+    alpha_end: float = 0.0001
     decay_epsilon: bool = True
     decay_alpha: bool = True
     debug: bool = False

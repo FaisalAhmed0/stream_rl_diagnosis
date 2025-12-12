@@ -1,8 +1,10 @@
 import torch
 
 class ObGD(torch.optim.Optimizer):
-    def __init__(self, params, lr=1.0, gamma=0.99, lamda=0.8, kappa=2.0):
+    def __init__(self, params, lr=1.0, gamma=0.99, lamda=0.8, kappa=2.0, adaptive_step_size=True, bound_delta=True):
         defaults = dict(lr=lr, gamma=gamma, lamda=lamda, kappa=kappa)
+        self.adaptive_step_size = adaptive_step_size
+        self.bound_delta = bound_delta
         super(ObGD, self).__init__(params, defaults)
     def step(self, delta, reset=False):
         z_sum = 0.0
@@ -15,12 +17,19 @@ class ObGD(torch.optim.Optimizer):
                 e.mul_(group["gamma"] * group["lamda"]).add_(p.grad, alpha=1.0)
                 z_sum += e.abs().sum().item()
 
-        delta_bar = max(abs(delta), 1.0)
+        if self.bound_delta:
+            delta_bar = max(abs(delta), 1.0)
+        else:
+            delta_bar = abs(delta)
         dot_product = delta_bar * z_sum * group["lr"] * group["kappa"]
-        if dot_product > 1:
-            step_size = group["lr"] / dot_product
+        if self.adaptive_step_size:
+            if dot_product > 1:
+                step_size = group["lr"] / dot_product
+            else:
+                step_size = group["lr"]
         else:
             step_size = group["lr"]
+
 
         for group in self.param_groups:
             for p in group["params"]:

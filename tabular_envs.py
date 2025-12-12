@@ -6,8 +6,11 @@ An example environment is provided in CliffwalkEnv
 """
 import gym
 import gym.spaces
+import gymnasium
 import numpy as np
 from dataclasses import dataclass
+from gym import Env
+from typing import Optional, Tuple, Any, Dict
 
 # from main import q_learning
 
@@ -59,11 +62,16 @@ class TabularEnv:
     def __init__(self, num_states, num_actions, initial_state_distribution):
         self._state = -1
         self.observation_space = gym.spaces.Discrete(num_states)
+        self.observation_space = gym.spaces.Box(
+            low = -1,
+            high = 1,
+            shape=(num_states, ))
         self.action_space = gym.spaces.Discrete(num_actions)
         self.num_states = num_states
         self.num_actions = num_actions
         self.initial_state_distribution = initial_state_distribution
         self._transition_map = {}
+        # import pdb;pdb.set_trace()
 
     def transitions(self, state, action):
         """Computes transition probabilities p(ns|s,a).
@@ -308,11 +316,11 @@ class InvertedPendulum(TabularEnv):
             action_discretization, 
             {initial_state: 1.0}
         )
-        self.observation_space = gym.spaces.Box(
-            low=np.array([0, 0, -self.max_vel]), 
-            high=np.array([1, 1, self.max_vel]), 
-            dtype=np.float32
-        )
+        # self.observation_space = gym.spaces.Box(
+        #     low=np.array([0, 0, -self.max_vel]), 
+        #     high=np.array([1, 1, self.max_vel]), 
+        #     dtype=np.float32
+        # )
 
     def transitions_cy(self, state, action):
         self._transition_map.clear()
@@ -396,11 +404,12 @@ class MountainCar(TabularEnv):
         initial_state = self.to_state_id(MountainCarState(-0.5, 0))
         print(initial_state)
         super(MountainCar, self).__init__(self._pos_disc * self._vel_disc, 3, {initial_state: 1.0})
-        self.observation_space = gym.spaces.Box(
-            low=np.array([self.min_pos, -self.max_vel]), 
-            high=np.array([self.max_pos, self.max_vel]), 
-            dtype=np.float32
-        )
+        # self.observation_space = gym.spaces.Box(
+        #     low=np.array([self.min_pos, -self.max_vel]), 
+        #     high=np.array([self.max_pos, self.max_vel]), 
+        #     dtype=np.float32
+        # )
+        # import pdb;pdb.set_trace()
 
     def transitions_cy(self, state, action):
         self._transition_map.clear()
@@ -449,9 +458,173 @@ class MountainCar(TabularEnv):
         print('(%f, %f) = %d' % (x1, x2, self.get_state()))
 
 
+class GymnasiumTabularWrapper(gymnasium.Env):
+    """Gymnasium wrapper for TabularEnv environments.
+    
+    This wrapper converts TabularEnv instances to follow the standard Gymnasium API.
+    It handles the conversion from the old Gym API (done flag) to the new Gymnasium API
+    (terminated and truncated flags).
+    
+    Args:
+        tabular_env: An instance of TabularEnv or its subclasses.
+    """
+    
+    def __init__(self, tabular_env: TabularEnv, max_episode_steps=200):
+        super().__init__()
+        self.tabular_env = tabular_env
+        self.max_episode_steps = max_episode_steps
+        # create a new spec object
+        from gymnasium.envs.registration import EnvSpec
+        self.spec = EnvSpec(
+                id="gymnasium_tabular_env",
+                max_episode_steps=max_episode_steps
+                # entry_point=env.spec.entry_point,
+                # max_episode_steps=env.spec.max_episode_steps,
+                # reward_threshold=env.spec.reward_threshold,
+                # nondeterministic=env.spec.nondeterministic,
+                # kwargs=env.spec.kwargs,
+            )
+        
+        # if tabular_env.spec is not None:
+        #     self.spec = EnvSpec(
+        #         id="gymnasium_tabular_env",
+        #         # entry_point=env.spec.entry_point,
+        #         # max_episode_steps=env.spec.max_episode_steps,
+        #         # reward_threshold=env.spec.reward_threshold,
+        #         # nondeterministic=env.spec.nondeterministic,
+        #         # kwargs=env.spec.kwargs,
+        #     )
+        # else:
+        #     # if env has no spec, just create a minimal one
+        #     self.spec = EnvSpec(id=None)
+        
+        # Convert spaces to gymnasium spaces
+        if isinstance(tabular_env.observation_space, gym.spaces.Discrete):
+            self.observation_space = gymnasium.spaces.Discrete(tabular_env.observation_space.n)
+        elif isinstance(tabular_env.observation_space, gym.spaces.Box):
+            self.observation_space = gymnasium.spaces.Box(
+                low=tabular_env.observation_space.low,
+                high=tabular_env.observation_space.high,
+                shape=tabular_env.observation_space.shape,
+                dtype=tabular_env.observation_space.dtype
+            )
+        else:
+            # Fallback: try to convert directly
+            self.observation_space = tabular_env.observation_space
+        
+        if isinstance(tabular_env.action_space, gym.spaces.Discrete):
+            self.action_space = gymnasium.spaces.Discrete(tabular_env.action_space.n)
+        elif isinstance(tabular_env.action_space, gym.spaces.Box):
+            self.action_space = gymnasium.spaces.Box(
+                low=tabular_env.action_space.low,
+                high=tabular_env.action_space.high,
+                shape=tabular_env.action_space.shape,
+                dtype=tabular_env.action_space.dtype
+            )
+        else:
+            # Fallback: try to convert directly
+            self.action_space = tabular_env.action_space
+        
+        # Metadata for Gymnasium compatibility
+        self.metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
+        self.render_mode = None
+    
+    def step(self, action: Any) -> Tuple[Any, float, bool, bool, Dict[str, Any]]:
+        """Run one timestep of the environment's dynamics.
+        
+        Args:
+            action: An action provided by the agent.
+            
+        Returns:
+            observation: Agent's observation of the current environment.
+            reward: Amount of reward returned after previous action.
+            terminated: Whether the agent reaches a terminal state (episode ends normally).
+            truncated: Whether the truncation condition outside the scope of the MDP is satisfied.
+            info: Contains auxiliary diagnostic information.
+        """
+        obs, reward, done, info = self.tabular_env.step(action)
+        obs = np.zeros(self.observation_space.shape[0])
+        obs[self.tabular_env.get_state()] = 1.
+        self.t += 1
+        if self.t > self.max_episode_steps:
+            terminated = done = True
+        else:
+            terminated  = done = False
+        # convert the observation to onehot vector
+        
+        # Convert done flag to terminated/truncated
+        # In the old API, done=True means episode ended (could be either terminated or truncated)
+        # We'll treat it as terminated by default, but this can be customized per environment
+        terminated = done
+        truncated = False
+        
+        # Update info to be compatible with Gymnasium
+        if not isinstance(info, dict):
+            info = {}
+        
+        return obs, reward, terminated, truncated, info
+    
+    def reset(
+        self, 
+        seed: Optional[int] = None, 
+        options: Optional[Dict[str, Any]] = None
+    ) -> Tuple[Any, Dict[str, Any]]:
+        """Resets the environment to an initial state and returns an initial observation.
+        
+        Args:
+            seed: The seed that is used to initialize the environment's PRNG.
+            options: Additional information to specify how the environment is reset.
+            
+        Returns:
+            observation: Observation of the initial state.
+            info: Dictionary containing auxiliary information.
+        """
+        if seed is not None:
+            np.random.seed(seed)
+        self.t = 0
+        
+        obs = self.tabular_env.reset()
+        obs = np.zeros(self.observation_space.shape[0])
+        obs[self.tabular_env.get_state()] = 1.
+        
+        # Return observation and info dict (Gymnasium API)
+        info = {}
+        if options is not None:
+            info.update(options)
+        
+        return obs, info
+    
+    def render(self):
+        """Render the environment."""
+        return self.tabular_env.render()
+    
+    def close(self):
+        """Clean up the environment's resources."""
+        pass
+    
+    # Expose TabularEnv methods for backward compatibility
+    def get_state(self):
+        """Return the agent's internal state."""
+        return self.tabular_env.get_state()
+    
+    def set_state(self, state):
+        """Set the agent's internal state."""
+        return self.tabular_env.set_state(state)
+    
+    def transition_matrix(self):
+        """Constructs this environment's transition matrix."""
+        return self.tabular_env.transition_matrix()
+    
+    def reward_matrix(self):
+        """Constructs this environment's reward matrix."""
+        return self.tabular_env.reward_matrix()
+
+
 # if __name__ == "__main__":
-#     print("hello envs")
+#     # print("hello envs")
 #     env = MountainCar()
+#     env = GymnasiumTabularWrapper(env)
+#     import pdb;pdb.set_trace()
 #     ## Q-learning configs
 #     num_episodes = 100
 
