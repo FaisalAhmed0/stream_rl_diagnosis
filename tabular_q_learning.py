@@ -2,6 +2,7 @@ import numpy as np
 from tabular_envs import MountainCar, InvertedPendulum, CliffwalkEnv
 from collections import deque
 from dataclasses import dataclass
+import random
 import tyro
 
 @dataclass
@@ -19,6 +20,11 @@ class Args:
     decay_epsilon: bool = True
     decay_alpha: bool = True
     debug: bool = False
+
+
+def seed_everything(seed):
+    np.random.seed(seed)
+    random.seed(seed)
 
 
 def save_array(array, filepath):
@@ -180,15 +186,12 @@ def q_learning(env, num_episodes, epsilon=1, epsilon_end=0.01,
 if __name__ == "__main__":
     args = tyro.cli(Args)
     env = eval(args.env_name)()
-    ## Q-learning configs
-    # num_episodes = 100_000
-    # eps_frac = 0.5
-    # epsilon = 1.0
-    # alpha=1.0
+    seed_everything(args.seed)
     q = q_learning(env, args.num_episodes, epsilon=args.epsilon_start, epsilon_end=args.epslion_end,
                     decay_epsilon=args.decay_epsilon, decay_alpha=args.decay_alpha, alpha=args.alpha_start, 
                     duration=args.expl_frac*args.num_episodes, debug=args.debug)
     print(q)
-    save_array(q, f"{args.env_name}_q_star_table.txt")
+    print(args.env_name)
+    save_array(q, f"{args.env_name}_q_star_table_seed_{args.seed}.txt")
     # import pdb;pdb.set_trace()
     # import pdb;pdb.set_trace()

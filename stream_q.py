@@ -1,3 +1,4 @@
+from math import trunc
 import os, pickle, argparse
 import torch
 import numpy as np
@@ -12,6 +13,12 @@ from tabular_envs import CliffwalkEnv, InvertedPendulum, MountainCar, GymnasiumT
 import wandb 
 
 
+Expert_returns = {
+    "MountainCar": 164, 
+    "InvertedPendulum": 191,
+    "CliffwalkEnv": 12
+}
+
 def linear_schedule(start_e: float, end_e: float, duration: int, t: int):
     slope = (end_e - start_e) / duration
     return max(slope * t + start_e, end_e)
@@ -21,10 +28,33 @@ def initialize_weights(m):
         sparse_init(m.weight, sparsity=0.9)
         m.bias.data.fill_(0.0)
 
+def evaluation(eval_env, q_function, num_evals=5, max_episode_steps=200):
+    all_returns = []
+    for eval in range(num_evals):
+        obs, _  = eval_env.reset()
+        done = False
+        sum_of_rewards = 0.0
+        t = 0
+        while True:
+            obs_t = torch.tensor(obs, dtype=torch.float)[None, :]
+            action = np.argmax(q_function(obs_t), axis=-1).item()
+            next_obs, reward, terminated, truncated, info = eval_env.step(action)
+            sum_of_rewards += reward
+            obs = next_obs
+            done = terminated or truncated
+            t += 1
+            if done or t>=max_episode_steps:
+                break
+        all_returns.append(sum_of_rewards)
+    return np.mean(all_returns), np.std(all_returns)
+    
+    
+
 class StreamQ(nn.Module):
     def __init__(self, n_obs=11, n_actions=3, hidden_size=32, lr=1.0, epsilon_target=0.01, epsilon_start=1.0, exploration_fraction=0.1, total_steps=1_000_000, gamma=0.99, lamda=0.8, kappa_value=2.0, layer_norm=1, args=None):
         super(StreamQ, self).__init__()
         assert args is not None
+        self.args = args
         self.n_actions = n_actions
         self.gamma = gamma
         self.epsilon_start = epsilon_start
@@ -38,7 +68,10 @@ class StreamQ(nn.Module):
         self.hidden_v  = nn.Linear(hidden_size, hidden_size)
         self.fc_v  = nn.Linear(hidden_size, n_actions)
         self.apply(initialize_weights)
-        self.optimizer = Optimizer(list(self.parameters()), lr=lr, gamma=gamma, lamda=args.eligibility_trace_lamda, kappa=kappa_value, adaptive_step_size=args.adaptive_step_size, bound_delta=args.bound_delta)
+        if args.use_sgd:
+            self.optimizer = torch.optim.SGD(list(self.parameters()), lr=lr)
+        else:
+            self.optimizer = Optimizer(list(self.parameters()), lr=lr, gamma=gamma, lamda=args.eligibility_trace_lamda, kappa=kappa_value, adaptive_step_size=args.adaptive_step_size, bound_delta=args.bound_delta)
 
     def q(self, x):
         x = self.fc1_v(x)
@@ -75,11 +108,19 @@ class StreamQ(nn.Module):
         max_q_s_prime_a_prime = torch.max(self.q(s_prime), dim=-1).values
         td_target = r + self.gamma * max_q_s_prime_a_prime * done_mask
         delta = td_target - q_sa
-
-        q_output = -q_sa
-        self.optimizer.zero_grad()
-        q_output.backward()
-        self.optimizer.step(delta.item(), reset=(done or is_nongreedy))
+        if self.args.use_sgd:
+            if torch.isnan(delta).sum() > 0:
+                print("Delta is nan, you training has diverged")
+            loss = delta**2
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+            q_output = -q_sa
+        else:
+            q_output = -q_sa
+            self.optimizer.zero_grad()
+            q_output.backward()
+            self.optimizer.step(delta.item(), reset=(done or is_nongreedy))
         metrics = {
             "training/q_output": q_output,
             "training/td_target": td_target,
@@ -106,6 +147,10 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_
             env = ScaleReward(env, gamma=gamma)
         # env = NormalizeObservation(env)
         env = AddTimeInfo(env)
+        eval_env = eval(env_name)()
+        eval_env = GymnasiumTabularWrapper(eval_env)
+        eval_env = gym.wrappers.RecordEpisodeStatistics(eval_env)
+        eval_env = AddTimeInfo(eval_env)
     else:
         env = gym.make(env_name, render_mode='human', max_episode_steps=10_000) if render else gym.make(env_name, max_episode_steps=10_000)
         env = gym.wrappers.FlattenObservation(env)
@@ -121,7 +166,7 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_
             project="Stream Q(λ)_tabular_envs",
             mode="online",
             config=vars(args),
-            name=f"Stream Q(λ)_env_name_{env_name}_seed_{seed}_sparsity_{args.sparsity}",
+            name=f"Stream Q(λ)_env_name_{env_name}_seed_{seed}_sparsity_{args.sparsity}_layer_norm_{args.layer_norm}_reward_rms_{args.reward_rms}_adaptive_step_size_{args.adaptive_step_size}_bound_delta_{args.bound_delta}_eligibility_trace_lamda_{args.eligibility_trace_lamda}_use_sgd_{args.use_sgd}",
             entity="streaming-x-diagnosis"
         )
     returns, term_time_steps = [], []
@@ -139,6 +184,8 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_
                 logs = {"training/epidoic_return":info['episode']['r'][0],
                         "training/epslion": agent.epsilon,
                         "training/episode_length": info['episode']['l'][0],}
+                if args.env_name in Expert_returns:
+                    logs["training/epidoic_normalized_return"] = info['episode']['r'][0]/Expert_returns[env_name]
                 metrics.update(logs)
                 wandb.log(metrics, step=t)
             returns.append(info['episode']['r'][0])
@@ -146,6 +193,21 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_
             terminated, truncated = False, False
             s, _ = env.reset()
             episode_num += 1
+        if t % args.eval_freq == 0:
+            with torch.no_grad():
+                eval_return, eval_std = evaluation(eval_env, agent.q, num_evals=5, max_episode_steps=200)
+            eval_logs = {
+                "eval/eval_return": eval_return,
+                "eval/eval_std": eval_std
+            }
+            if args.env_name in Expert_returns:
+                eval_logs["eval/eval_normalized_return"] = eval_return/Expert_returns[env_name]
+            if args.track:
+                wandb.log(eval_logs, step=t)
+            if debug:
+                print("Eval Return: {}, Eval Normalized Return: {}, Eval Std: {}".format(eval_return, eval_return/Expert_returns[env_name], eval_std))
+
+
     env.close()
     if track:
         wandb.finish()
@@ -161,16 +223,18 @@ if __name__ == '__main__':
     parser.add_argument('--tabular_env', action='store_true')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--lr', type=float, default=1.0)
-    parser.add_argument('--gamma', type=float, default=0.99)
+    parser.add_argument('--gamma', type=float, default=0.9)
     parser.add_argument('--lamda', type=float, default=0.8)
     parser.add_argument('--epsilon_target', type=float, default=0.01)
     parser.add_argument('--epsilon_start', type=float, default=1.0)
-    parser.add_argument('--exploration_fraction', type=float, default=0.05)
+    parser.add_argument('--exploration_fraction', type=float, default=0.3)
     parser.add_argument('--kappa_value', type=float, default=2.0)
-    parser.add_argument('--total_steps', type=int, default=500_000)
+    parser.add_argument('--total_steps', type=int, default=2_000_000)
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--overshooting_info', action='store_true')
     parser.add_argument('--render', action='store_true')
+    parser.add_argument('--eval_freq', type=int, default=1_000)
+    
     # track with wandb
     parser.add_argument('--track', type=int, default=0)
     ## For empirical analysis
@@ -180,6 +244,7 @@ if __name__ == '__main__':
     parser.add_argument('--adaptive_step_size', type=int, default=1)
     parser.add_argument('--bound_delta', type=int, default=1)
     parser.add_argument('--eligibility_trace_lamda', type=float, default=0.8) # if set to zero it is the td loss, while 1 is similar to MC estimate
+    parser.add_argument("--use_sgd", action="store_true")
     # layer norom 
     # optimizer 
     # reward normalization 
