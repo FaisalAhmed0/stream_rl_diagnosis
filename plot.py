@@ -1,6 +1,7 @@
 import numpy as np
 import pickle, os
 import matplotlib.pyplot as plt
+import glob
 
 def avg_return_curve(x, y, stride, total_steps):
     """
@@ -28,29 +29,87 @@ def avg_return_curve(x, y, stride, total_steps):
         stderr_ret[i] = np.std(avg_rets_per_run) / np.sqrt(num_runs)
     return steps, avg_ret, stderr_ret
 
-def main(data_dir, hidden_size, num_layers, int_space, total_steps):
-    plt.figure(figsize=(8, 5))
-    all_termination_time_steps, all_episodic_returns, env_name = [], [], ''
-    for file in os.listdir(data_dir):
-        if file.endswith(".pkl"):
-            with open(os.path.join(data_dir, file), "rb") as f:
+def parse_h_nl(dir_name):
+    h, nl = 0, 0
+    for part in dir_name.split('_'):
+        if part.startswith('h') and part[1:].isdigit():
+            h = int(part[1:])
+        elif part.startswith('nl') and part[2:].isdigit():
+            nl = int(part[2:])
+    return h, nl
+
+def get_env_and_algo_names(dir_path):
+    pkl_files = [f for f in os.listdir(dir_path) if f.endswith(".pkl")]
+    with open(os.path.join(dir_path, pkl_files[0]), "rb") as f:
+        episodic_returns, termination_time_steps, env_name = pickle.load(f)
+    parts = os.path.basename(dir_path).split('_')
+    algo_name = parts[2].upper()
+    return env_name, algo_name
+
+def plot_dirs(dirs, int_space, total_steps, title, out_png):
+    plt.figure(figsize=(14, 8))
+    colors = plt.cm.tab10(np.linspace(0, 1, len(dirs)))
+
+    env_name = ""
+    for idx, dir_path in enumerate(dirs):
+        all_termination_time_steps, all_episodic_returns = [], []
+        pkl_files = [f for f in os.listdir(dir_path) if f.endswith(".pkl")]
+        for file in pkl_files:
+            with open(os.path.join(dir_path, file), "rb") as f:
                 episodic_returns, termination_time_steps, env_name = pickle.load(f)
                 all_termination_time_steps.append(termination_time_steps)
                 all_episodic_returns.append(episodic_returns)
-    
-    steps, avg_ret, stderr_ret = avg_return_curve(all_termination_time_steps, all_episodic_returns, int_space, total_steps)
-    plt.fill_between(steps, avg_ret - stderr_ret, avg_ret + stderr_ret, color="tab:blue", alpha=0.4)
-    plt.plot(steps, avg_ret, linewidth=2.0)
 
-    plt.xlabel("Time Step", fontsize=14)
-    plt.ylabel(f"Average Episodic Return", fontsize=14)
-    plt.title(r"Stream AC(0.8)" + f" in {env_name} with hidden size {hidden_size} and {num_layers} layers")
-    plt.savefig(f"{env_name}_h{hidden_size}_nl{num_layers}.png")
+        h, nl = parse_h_nl(os.path.basename(dir_path))
+        steps, avg_ret, stderr_ret = avg_return_curve(
+            all_termination_time_steps, all_episodic_returns, int_space, total_steps
+        )
+
+        label = f"h={h}, nl={nl}"
+        color = colors[idx]
+        plt.fill_between(steps, avg_ret - stderr_ret, avg_ret + stderr_ret, color=color, alpha=0.10)
+        plt.plot(steps, avg_ret, linewidth=3.5, color=color, label=label)
+
+    plt.xlabel("Time Step", fontsize=20)
+    plt.ylabel("Average Episodic Return", fontsize=20)
+    plt.title(title, fontsize=22)
+    plt.legend(loc="best", fontsize=16)
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(out_png, dpi=200)
+    plt.close()
+
+def main(data_dir, fixed_h, fixed_nl, int_space, total_steps):
+    all_dirs = sorted([d for d in glob.glob(data_dir) if os.path.isdir(d)])
+    env_name, algo_name = get_env_and_algo_names(all_dirs[0])
+
+    meta = sorted([(parse_h_nl(os.path.basename(d)), d) for d in all_dirs])
+
+    # fixed width and vary depth
+    depth_sweep = [d for (h, nl), d in meta if h == fixed_h]
+    plot_dirs(
+        depth_sweep,
+        int_space,
+        total_steps,
+        title=f"Stream {algo_name}(0.8) on {env_name}: fixed width h={fixed_h} and varying depth",
+        out_png=f"{env_name}_fixh{fixed_h}_vary_nl.png",
+    )
+
+    # fixed depth and vary width
+    width_sweep = [d for (h, nl), d in meta if nl == fixed_nl]
+    plot_dirs(
+        width_sweep,
+        int_space,
+        total_steps,
+        title=f"Stream {algo_name}(0.8) on {env_name}: fixed depth nl={fixed_nl} and varying width",
+        out_png=f"{env_name}_fixnl{fixed_nl}_vary_h.png",
+    )
 
 if __name__ == '__main__':
+    # for instance: python plot.py --data_dir "data_stream_ac_HalfCheetah-v4_*" --hidden_size 128 --num_layers 2
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data_dir', type=str, default='data_stream_ac_Ant-v4_lr1.0_gamma0.99_lamda0.8_entropy_coeff0.01')
+    parser.add_argument('--data_dir', type=str)
     parser.add_argument('--hidden_size', type=int, default=32)
     parser.add_argument('--num_layers', type=int, default=32)
     parser.add_argument('--int_space', type=int, default=50_000)
