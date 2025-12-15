@@ -4,23 +4,28 @@ import matplotlib.pyplot as plt
 
 api = wandb.Api()
 
+plt.rcParams.update({'font.size': 20})
+
+## Minigrid 16x16
 # run_paths = [
 #     "streaming-x-diagnosis/Stream_AC_Minigrid/o6ih2q69",
 #     "streaming-x-diagnosis/Stream_AC_Minigrid/4pnj2mzg",
-#     "streaming-x-diagnosis/Stream_Q_Minigrid/di58wbsz",
-#     "streaming-x-diagnosis/Stream_Q_Minigrid/josz6tfn"
+#     "streaming-x-diagnosis/Stream_Q_Minigrid_2/x012idia",
+#     "streaming-x-diagnosis/Stream_Q_Minigrid_2/1tr243h9"
 # ]
 
-# run_paths = [
-#     "streaming-x-diagnosis/Stream_Q_Minigrid/ajqnfdu6",
-#     "streaming-x-diagnosis/Stream_Q_Minigrid/nghnzcte",
-#     "streaming-x-diagnosis/Stream_AC_Minigrid/49jvqhza",
-#     "streaming-x-diagnosis/Stream_AC_Minigrid/bs3l2y0h"
-# ]
-
+## Memory S7
 run_paths = [
-    "streaming-x-diagnosis/Stream_AC_Minigrid/ngmoin0k",    
+    "streaming-x-diagnosis/Stream_Q_Minigrid/92zy7aie",
+    "streaming-x-diagnosis/Stream_Q_Minigrid_2/wh7coixs",
+    "streaming-x-diagnosis/Stream_AC_Minigrid/bs3l2y0h",
+    "streaming-x-diagnosis/Stream_AC_Minigrid/ln8oxzyo"
 ]
+
+## Memory S13
+# run_paths = [
+#     "streaming-x-diagnosis/Stream_AC_Minigrid/ngmoin0k",    
+# ]
 
 
 # --- PARAMÈTRE A MODIFIER ---
@@ -54,10 +59,20 @@ for run_p in run_paths:
             color = p[0].get_color() # On capture la couleur attribuée
             
             # B. On trace la moyenne glissante avec la même couleur, mais plus épaisse
-            plt.plot(history['_step'], history['rolling_return'], 
-                     label=f"{run.name} (Moyenne {WINDOW_SIZE})", 
-                     color=color, 
-                     linewidth=2)
+            if "Q" in run.name :
+                stop = 8
+            else :
+                stop = 9
+            if "0.8" in run.name:
+                plt.plot(history['_step'], history['rolling_return'], 
+                        label=f"{run.name[:stop]}(0.8)", 
+                        color=color, 
+                        linewidth=2)
+            else:
+                plt.plot(history['_step'], history['rolling_return'], 
+                        label=f"{run.name[:stop]}(0.0)", 
+                        color=color, 
+                        linewidth=2)
             
             print(f"-> Ajouté : {run.name}")
         else:
@@ -66,10 +81,11 @@ for run_p in run_paths:
     except Exception as e:
         print(f"Erreur sur {run_p}: {e}")
 
-plt.title(f"Comparaison des retours épisodiques (Lissage: {WINDOW_SIZE})")
-plt.xlabel("Steps")
-plt.ylabel("Episodic Return")
-plt.legend(loc="best")
+plt.xlabel("Timesteps")
+# plt.ylabel("Episodic Return")
+plt.xlim((0, 1_000_000))
+plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+plt.legend(loc="upper left")
 plt.grid(True, alpha=0.3)
 
 output_filename = "comparaison_runs_rolling2.png"
