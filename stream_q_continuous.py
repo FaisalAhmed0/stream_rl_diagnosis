@@ -280,8 +280,6 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_
         with torch.no_grad():
             entropy = agent.compute_entropy(dist)
         
-        print(gradient_steps_per)
-        
         for grad_step in range(gradient_steps_per_step):
             metrics = agent.update_params(s, a, r, s_prime, terminated or truncated, 
                                           is_nongreedy, entropy_coeff=0.01, 
