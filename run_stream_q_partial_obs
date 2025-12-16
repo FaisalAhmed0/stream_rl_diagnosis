@@ -1,4 +1,4 @@
 ## orginal stream q learning
-sbatch train stream_q_minigrid.py --env_name="MiniGrid-MemoryS7-v0" --lamda=0.8 --total_steps=1000000 --track=1 
-sbatch train stream_q_minigrid.py --env_name="MiniGrid-Empty-16x16-v0" --lamda=0.8 --total_steps=500000 --track=1 
-sbatch train stream_q_minigrid.py --env_name="MiniGrid-Empty-16x16-v0" --lamda=0.0 --total_steps=500000 --track=1 
+python stream_q_minigrid.py --env_name="MiniGrid-MemoryS7-v0" --lamda=0.8 --total_steps=1000000 --track=1 
+python stream_q_minigrid.py --env_name="MiniGrid-Empty-16x16-v0" --lamda=0.8 --total_steps=500000 --track=1 
+python stream_q_minigrid.py --env_name="MiniGrid-Empty-16x16-v0" --lamda=0.0 --total_steps=500000 --track=1 

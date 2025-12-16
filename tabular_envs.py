@@ -698,27 +698,29 @@ def value_iteration(env: TabularEnv, gamma=0.99, theta=1e-6):
             
     return Q
 
-if __name__ == "__main__":
-    # Initialize one of your environments
-    # env_name = "InvertedPendulum"
-    # env_name = "CliffwalkEnv"
-    env_name="MountainCar"
-    env = eval(env_name)()
-    
-    # Solve for optimal Q
-    optimal_q = value_iteration(env, gamma=0.9)
-    
-    # Example: Look at the best action for the first state
-    best_action_state_0 = np.argmax(optimal_q[0])
-    print(f"Optimal action in state 0: {best_action_state_0}")
-    print(f"Optimal Q-values for state 0: {optimal_q[0]}")
-    save_array(optimal_q, f"env_name_{env_name}_value_iteration.txt")
-#     # print("hello envs")
-#     env = MountainCar()
-#     env = GymnasiumTabularWrapper(env)
-#     import pdb;pdb.set_trace()
-#     ## Q-learning configs
-#     num_episodes = 100
 
-#     q_learning(env, )
-#     import pdb;pdb.set_trace()
+## Value iteration
+# if __name__ == "__main__":
+#     # Initialize one of your environments
+#     # env_name = "InvertedPendulum"
+#     # env_name = "CliffwalkEnv"
+#     env_name="MountainCar"
+#     env = eval(env_name)()
+    
+#     # Solve for optimal Q
+#     optimal_q = value_iteration(env, gamma=0.9)
+    
+#     # Example: Look at the best action for the first state
+#     best_action_state_0 = np.argmax(optimal_q[0])
+#     print(f"Optimal action in state 0: {best_action_state_0}")
+#     print(f"Optimal Q-values for state 0: {optimal_q[0]}")
+#     save_array(optimal_q, f"env_name_{env_name}_value_iteration.txt")
+# #     # print("hello envs")
+# #     env = MountainCar()
+# #     env = GymnasiumTabularWrapper(env)
+# #     import pdb;pdb.set_trace()
+# #     ## Q-learning configs
+# #     num_episodes = 100
+
+# #     q_learning(env, )
+# #     import pdb;pdb.set_trace()
