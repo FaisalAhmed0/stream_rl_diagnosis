@@ -133,10 +133,11 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, entropy_coeff, kappa_pol
         print("seed: {}".format(seed), "env: {}".format(env.spec.id))
     if track:
         wandb.init(
-            project="Stream AC(λ)",
+            project="Stream AC(λ)_overfitting_longer_time",
             mode="online",
             config=vars(args) if args else {},
-            name=f"Stream AC(λ)_env_{env_name}_seed_{seed}_gradient_steps{gradient_steps_per_step}"
+            name=f"Stream AC(λ)_env_{env_name}_seed_{seed}_gradient_steps{gradient_steps_per_step}",
+            entity="streaming-x-diagnosis"
         )
     returns, term_time_steps = [], []
     s, _ = env.reset(seed=seed)

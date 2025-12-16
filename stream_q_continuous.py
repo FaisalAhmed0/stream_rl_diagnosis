@@ -256,7 +256,8 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_
             project="Stream Q(λ) Continuous",
             mode="online",
             config=vars(args),
-            name=f"Stream Q(λ)_env_{env_name}_seed_{seed}_gradient_updates_per_step{args.gradient_steps_per_step}_sparsity_{args.sparsity}"
+            name=f"Stream Q(λ)_env_{env_name}_seed_{seed}_gradient_updates_per_step{args.gradient_steps_per_step}_sparsity_{args.sparsity}",
+            entity="streaming-x-diagnosis"
         )
     
     returns, term_time_steps = [], []

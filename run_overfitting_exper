@@ -1,0 +1,9 @@
+sbatch train stream_q_continuous.py --debug --env Humanoid-v4 --track=1 --total_steps=500000 --seed=0 --gradient_steps_per_step=2
+sbatch train stream_q_continuous.py --debug --env Humanoid-v4 --track=1 --total_steps=500000 --seed=1 --gradient_steps_per_step=2
+sbatch train stream_q_continuous.py --debug --env Humanoid-v4 --track=1 --total_steps=500000 --seed=2 --gradient_steps_per_step=2
+sbatch train stream_q_continuous.py --debug --env Humanoid-v4 --track=1 --total_steps=500000 --seed=0 --gradient_steps_per_step=4
+sbatch train stream_q_continuous.py --debug --env Humanoid-v4 --track=1 --total_steps=500000 --seed=1 --gradient_steps_per_step=4
+sbatch train stream_q_continuous.py --debug --env Humanoid-v4 --track=1 --total_steps=500000 --seed=2 --gradient_steps_per_step=4
+sbatch train stream_q_continuous.py --debug --env Humanoid-v4 --track=1 --total_steps=500000 --seed=0 --gradient_steps_per_step=8
+sbatch train stream_q_continuous.py --debug --env Humanoid-v4 --track=1 --total_steps=500000 --seed=1 --gradient_steps_per_step=8
+sbatch train stream_q_continuous.py --debug --env Humanoid-v4 --track=1 --total_steps=500000 --seed=2 --gradient_steps_per_step=8

@@ -1,0 +1,13 @@
+sbatch train tabular_q_learning.py --env_name="MountainCar" --debug --num_episodes=1000000 --seed=1
+sbatch train tabular_q_learning.py --env_name="InvertedPendulum" --debug --num_episodes=1000000 --seed=1
+sbatch train tabular_q_learning.py --env_name="CliffwalkEnv" --debug --num_episodes=1000000 --seed=1
+
+
+sbatch train tabular_q_learning.py --env_name="MountainCar" --debug --num_episodes=1000000 --seed=18950
+sbatch train tabular_q_learning.py --env_name="InvertedPendulum" --debug --num_episodes=1000000 --seed=18950
+sbatch train tabular_q_learning.py --env_name="CliffwalkEnv" --debug --num_episodes=1000000 --seed=18950
+
+
+sbatch train tabular_q_learning.py --env_name="MountainCar" --debug --num_episodes=1000000 --seed=985
+sbatch train tabular_q_learning.py --env_name="InvertedPendulum" --debug --num_episodes=1000000 --seed=985
+sbatch train tabular_q_learning.py --env_name="CliffwalkEnv" --debug --num_episodes=1000000 --seed=985
