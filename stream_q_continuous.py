@@ -229,6 +229,8 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_
     obs_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
     
+    gradient_steps_per_step = args.gradient_steps_per_step if args else 1
+
 
     agent = StreamQ(
         n_obs=obs_dim, 
@@ -241,7 +243,7 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_
         exploration_fraction=exploration_fraction, 
         total_steps=total_steps, 
         kappa_value=kappa_value,
-        sparsity=args.sparsity
+        sparsity=args.sparsity if args else 0.9
     )
     
     if debug:
@@ -254,7 +256,7 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_
             project="Stream Q(λ) Continuous",
             mode="online",
             config=vars(args),
-            name=f"Stream Q(λ)_env_{env_name}_seed_{seed}_sparsity_{args.sparsity}"
+            name=f"Stream Q(λ)_env_{env_name}_seed_{seed}_gradient_updates_per_step{args.gradient_steps_per_step}_sparsity_{args.sparsity}"
         )
     
     returns, term_time_steps = [], []
@@ -278,9 +280,22 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_
         with torch.no_grad():
             entropy = agent.compute_entropy(dist)
         
-        metrics = agent.update_params(s, a, r, s_prime, terminated or truncated, 
-                                      is_nongreedy, entropy_coeff=0.01, 
-                                      overshooting_info=overshooting_info)
+        print(gradient_steps_per)
+        
+        for grad_step in range(gradient_steps_per_step):
+            metrics = agent.update_params(s, a, r, s_prime, terminated or truncated, 
+                                          is_nongreedy, entropy_coeff=0.01, 
+                                          overshooting_info=overshooting_info)
+
+            if grad_step == gradient_steps_per_step - 1 and track and t % 100 == 0:
+                metrics.update({
+                    "training/step_entropy": entropy.item(),
+                    "training/step_reward": r,
+                    "training/step": t,
+                    "training/gradient_step": grad_step + 1,
+                    "training/total_gradient_steps": t * gradient_steps_per_step,
+                })
+
         s = s_prime
         
 
@@ -383,8 +398,8 @@ if __name__ == '__main__':
     parser.add_argument('--overshooting_info', action='store_true')
     parser.add_argument('--render', action='store_true')
     parser.add_argument('--track', type=int, default=0)
-    parser.add_argument('--sparsity', type=float, default=0.9, 
-                       help="Amount of sparsity in the neural network initialization")
+    parser.add_argument('--sparsity', type=float, default=0.9, help="Amount of sparsity in the neural network initialization")
+    parser.add_argument('--gradient_steps_per_step', type=int, default=1, help='Number of gradient steps per environment step')
 
     parser.add_argument('--entropy_coeff', type=float, default=0.01,
                        help="Entropy regularization coefficient")

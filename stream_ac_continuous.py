@@ -14,8 +14,6 @@ import wandb
 def create_spare_initializer(sparsity=0.9):
     def initialize_weights(m):
         if isinstance(m, nn.Linear):
-            ## Sparse initilization
-            # import pdb;pdb.set_trace()
             sparse_init(m.weight, sparsity=sparsity)
             m.bias.data.fill_(0.0)
     return initialize_weights
@@ -130,6 +128,7 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, entropy_coeff, kappa_pol
     env = NormalizeObservation(env)
     env = AddTimeInfo(env)
     agent = StreamAC(n_obs=env.observation_space.shape[0], n_actions=env.action_space.shape[0], lr=lr, gamma=gamma, lamda=lamda, kappa_policy=kappa_policy, kappa_value=kappa_value, sparsity=args.sparsity)
+    gradient_steps_per_step = args.gradient_steps_per_step if args else 1
     if debug:
         print("seed: {}".format(seed), "env: {}".format(env.spec.id))
     if track:
@@ -137,14 +136,16 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, entropy_coeff, kappa_pol
             project="Stream AC(λ)",
             mode="online",
             config=vars(args) if args else {},
-            name=f"Stream AC(λ)_env_{env_name}_seed_{seed}"
+            name=f"Stream AC(λ)_env_{env_name}_seed_{seed}_gradient_steps{gradient_steps_per_step}"
         )
     returns, term_time_steps = [], []
     s, _ = env.reset(seed=seed)
     for t in range(1, total_steps+1):
         a = agent.sample_action(s)
         s_prime, r, terminated, truncated, info = env.step(a)
-        metrics = agent.update_params(s, a, r, s_prime,  terminated or truncated, entropy_coeff, overshooting_info)
+
+        for _ in range(gradient_steps_per_step):
+            metrics = agent.update_params(s, a, r, s_prime,  terminated or truncated, entropy_coeff, overshooting_info)
         s = s_prime
         if terminated or truncated:
             if debug:
@@ -186,7 +187,8 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--overshooting_info', action='store_true')
     parser.add_argument('--render', action='store_true')
-    # track with wandb
+    parser.add_argument('--gradient_steps_per_step', type=int, default=1, help='Number of gradient steps per environment step')
+    
     parser.add_argument('--track', type=int, default=0)
     parser.add_argument('--sparsity', type=float, default=0.9, help="Amount of sparsity in the neural network intialization")
     args = parser.parse_args()
