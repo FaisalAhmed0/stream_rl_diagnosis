@@ -1,30 +1,79 @@
 ## orginal stream q learning
-sbatch train stream_q.py --env_name="MountainCar" --debug  --seed=1 --track=1 --tabular_env --total_steps=10000000 --exploration_fraction=0.5
-sbatch train stream_q.py --env_name="InvertedPendulum" --debug  --seed=1 --track=1 --tabular_env 
-sbatch train stream_q.py --env_name="CliffwalkEnv" --debug  --seed=1 --track=1 --tabular_env 
+sbatch train_q_network stream_q.py --env_name="MountainCar" --debug  --seed=1 --track=1 --tabular_env --total_steps=10000000 --exploration_fraction=0.5 --wandb_project="Stream-Q-ablation"
+sbatch train_q_network stream_q.py --env_name="InvertedPendulum" --debug  --seed=1 --track=1 --tabular_env  --wandb_project="Stream-Q-ablation"
+sbatch train_q_network stream_q.py --env_name="CliffwalkEnv" --debug  --seed=1 --track=1 --tabular_env  --wandb_project="Stream-Q-ablation"
 
 
-sbatch train stream_q.py --env_name="MountainCar" --debug  --seed=18950 --track=1 --tabular_env --total_steps=10000000 --exploration_fraction=0.5
-sbatch train stream_q.py --env_name="InvertedPendulum" --debug  --seed=18950 --track=1 --tabular_env
-sbatch train stream_q.py --env_name="CliffwalkEnv" --debug  --seed=18950 --track=1 --tabular_env
+sbatch train_q_network stream_q.py --env_name="MountainCar" --debug  --seed=18950 --track=1 --tabular_env --total_steps=10000000 --exploration_fraction=0.5 --wandb_project="Stream-Q-ablation"
+sbatch train_q_network stream_q.py --env_name="InvertedPendulum" --debug  --seed=18950 --track=1 --tabular_env --wandb_project="Stream-Q-ablation"
+sbatch train_q_network stream_q.py --env_name="CliffwalkEnv" --debug  --seed=18950 --track=1 --tabular_env --wandb_project="Stream-Q-ablation"
 
 
-sbatch train stream_q.py --env_name="MountainCar" --debug  --seed=985 --track=1 --tabular_env --total_steps=10000000 --exploration_fraction=0.5
-sbatch train stream_q.py --env_name="InvertedPendulum" --debug  --seed=985 --track=1 --tabular_env
-sbatch train stream_q.py --env_name="CliffwalkEnv" --debug  --seed=985 --track=1 --tabular_env
+sbatch train_q_network stream_q.py --env_name="MountainCar" --debug  --seed=985 --track=1 --tabular_env --total_steps=10000000 --exploration_fraction=0.5 --wandb_project="Stream-Q-ablation"
+sbatch train_q_network stream_q.py --env_name="InvertedPendulum" --debug  --seed=985 --track=1 --tabular_env --wandb_project="Stream-Q-ablation"
+sbatch train_q_network stream_q.py --env_name="CliffwalkEnv" --debug  --seed=985 --track=1 --tabular_env --wandb_project="Stream-Q-ablation"
 
 
-## naive q learning with deep neural networks
-sbatch train stream_q.py --env_name="MountainCar" --debug  --seed=1 --track=1 --tabular_env --use_sgd --lr=0.0001 --reward_rms=0 --layer_norm=0 --sparsity=0.0 --adaptive_step_size=0 --bound_delta=0 --eligibility_trace_lamda=0 --total_steps=10000000 --exploration_fraction=0.5
-sbatch train stream_q.py --env_name="InvertedPendulum" --debug  --seed=1 --track=1 --tabular_env --use_sgd --lr=0.0001 --reward_rms=0 --layer_norm=0 --sparsity=0.0 --adaptive_step_size=0 --bound_delta=0 --eligibility_trace_lamda=0
-sbatch train stream_q.py --env_name="CliffwalkEnv" --debug  --seed=1 --track=1 --tabular_env --use_sgd --lr=0.0001 --reward_rms=0 --layer_norm=0 --sparsity=0.0 --adaptive_step_size=0 --bound_delta=0 --eligibility_trace_lamda=0
+# without reward normalization
+sbatch train_q_network stream_q.py --env_name="MountainCar" --debug  --seed=1 --track=1 --tabular_env --total_steps=10000000 --exploration_fraction=0.5 --wandb_project="Stream-Q-ablation" --reward_rms=0
+sbatch train_q_network stream_q.py --env_name="InvertedPendulum" --debug  --seed=1 --track=1 --tabular_env  --wandb_project="Stream-Q-ablation" --reward_rms=0
+sbatch train_q_network stream_q.py --env_name="CliffwalkEnv" --debug  --seed=1 --track=1 --tabular_env  --wandb_project="Stream-Q-ablation" --reward_rms=0
 
 
-sbatch train stream_q.py --env_name="MountainCar" --debug  --seed=18950 --track=1 --tabular_env --use_sgd --lr=0.0001 --reward_rms=0 --layer_norm=0 --sparsity=0.0 --adaptive_step_size=0 --bound_delta=0 --eligibility_trace_lamda=0 --total_steps=10000000 --exploration_fraction=0.5
-sbatch train stream_q.py --env_name="InvertedPendulum" --debug  --seed=18950 --track=1 --tabular_env --use_sgd --lr=0.0001 --reward_rms=0 --layer_norm=0 --sparsity=0.0 --adaptive_step_size=0 --bound_delta=0 --eligibility_trace_lamda=0
-sbatch train stream_q.py --env_name="CliffwalkEnv" --debug  --seed=18950 --track=1 --tabular_env --use_sgd --lr=0.0001 --reward_rms=0 --layer_norm=0 --sparsity=0.0 --adaptive_step_size=0 --bound_delta=0 --eligibility_trace_lamda=0
+sbatch train_q_network stream_q.py --env_name="MountainCar" --debug  --seed=18950 --track=1 --tabular_env --total_steps=10000000 --exploration_fraction=0.5 --wandb_project="Stream-Q-ablation" --reward_rms=0
+sbatch train_q_network stream_q.py --env_name="InvertedPendulum" --debug  --seed=18950 --track=1 --tabular_env --wandb_project="Stream-Q-ablation" --reward_rms=0
+sbatch train_q_network stream_q.py --env_name="CliffwalkEnv" --debug  --seed=18950 --track=1 --tabular_env --wandb_project="Stream-Q-ablation" --reward_rms=0
 
 
-sbatch train stream_q.py --env_name="MountainCar" --debug  --seed=985 --track=1 --tabular_env --use_sgd --lr=0.0001 --reward_rms=0 --layer_norm=0 --sparsity=0.0 --adaptive_step_size=0 --bound_delta=0 --eligibility_trace_lamda=0 --total_steps=10000000 --exploration_fraction=0.5
-sbatch train stream_q.py --env_name="InvertedPendulum" --debug  --seed=985 --track=1 --tabular_env --use_sgd --lr=0.0001 --reward_rms=0 --layer_norm=0 --sparsity=0.0 --adaptive_step_size=0 --bound_delta=0 --eligibility_trace_lamda=0
-sbatch train stream_q.py --env_name="CliffwalkEnv" --debug  --seed=985 --track=1 --tabular_env --use_sgd --lr=0.0001 --reward_rms=0 --layer_norm=0 --sparsity=0.0 --adaptive_step_size=0 --bound_delta=0 --eligibility_trace_lamda=0
+sbatch train_q_network stream_q.py --env_name="MountainCar" --debug  --seed=985 --track=1 --tabular_env --total_steps=10000000 --exploration_fraction=0.5 --wandb_project="Stream-Q-ablation" --reward_rms=0
+sbatch train_q_network stream_q.py --env_name="InvertedPendulum" --debug  --seed=985 --track=1 --tabular_env --wandb_project="Stream-Q-ablation" --reward_rms=0
+sbatch train_q_network stream_q.py --env_name="CliffwalkEnv" --debug  --seed=985 --track=1 --tabular_env --wandb_project="Stream-Q-ablation" --reward_rms=0
+
+
+
+## without sparse initilization
+sbatch train_q_network stream_q.py --env_name="MountainCar" --debug  --seed=1 --track=1 --tabular_env --total_steps=10000000 --exploration_fraction=0.5 --wandb_project="Stream-Q-ablation" --sparsity=0
+sbatch train_q_network stream_q.py --env_name="InvertedPendulum" --debug  --seed=1 --track=1 --tabular_env  --wandb_project="Stream-Q-ablation" --sparsity=0
+sbatch train_q_network stream_q.py --env_name="CliffwalkEnv" --debug  --seed=1 --track=1 --tabular_env  --wandb_project="Stream-Q-ablation" --sparsity=0
+
+
+sbatch train_q_network stream_q.py --env_name="MountainCar" --debug  --seed=18950 --track=1 --tabular_env --total_steps=10000000 --exploration_fraction=0.5 --wandb_project="Stream-Q-ablation" --reward_rms=0
+sbatch train_q_network stream_q.py --env_name="InvertedPendulum" --debug  --seed=18950 --track=1 --tabular_env --wandb_project="Stream-Q-ablation" --sparsity=0
+sbatch train_q_network stream_q.py --env_name="CliffwalkEnv" --debug  --seed=18950 --track=1 --tabular_env --wandb_project="Stream-Q-ablation" --sparsity=0
+
+
+sbatch train_q_network stream_q.py --env_name="MountainCar" --debug  --seed=985 --track=1 --tabular_env --total_steps=10000000 --exploration_fraction=0.5 --wandb_project="Stream-Q-ablation" --sparsity=0
+sbatch train_q_network stream_q.py --env_name="InvertedPendulum" --debug  --seed=985 --track=1 --tabular_env --wandb_project="Stream-Q-ablation" --sparsity=0
+sbatch train_q_network stream_q.py --env_name="CliffwalkEnv" --debug  --seed=985 --track=1 --tabular_env --wandb_project="Stream-Q-ablation" --sparsity=0
+
+
+## without adaptive_step_size
+sbatch train_q_network stream_q.py --env_name="MountainCar" --debug  --seed=1 --track=1 --tabular_env --total_steps=10000000 --exploration_fraction=0.5 --wandb_project="Stream-Q-ablation" --adaptive_step_size=0
+sbatch train_q_network stream_q.py --env_name="InvertedPendulum" --debug  --seed=1 --track=1 --tabular_env  --wandb_project="Stream-Q-ablation" --adaptive_step_size=0
+sbatch train_q_network stream_q.py --env_name="CliffwalkEnv" --debug  --seed=1 --track=1 --tabular_env  --wandb_project="Stream-Q-ablation" --adaptive_step_size=0
+
+
+sbatch train_q_network stream_q.py --env_name="MountainCar" --debug  --seed=18950 --track=1 --tabular_env --total_steps=10000000 --exploration_fraction=0.5 --wandb_project="Stream-Q-ablation" --adaptive_step_size=0
+sbatch train_q_network stream_q.py --env_name="InvertedPendulum" --debug  --seed=18950 --track=1 --tabular_env --wandb_project="Stream-Q-ablation" --adaptive_step_size=0
+sbatch train_q_network stream_q.py --env_name="CliffwalkEnv" --debug  --seed=18950 --track=1 --tabular_env --wandb_project="Stream-Q-ablation" --adaptive_step_size=0
+
+
+# sbatch train_q_network stream_q.py --env_name="MountainCar" --debug  --seed=985 --track=1 --tabular_env --total_steps=10000000 --exploration_fraction=0.5 --wandb_project="Stream-Q-ablation" --adaptive_step_size=0
+# sbatch train_q_network stream_q.py --env_name="InvertedPendulum" --debug  --seed=985 --track=1 --tabular_env --wandb_project="Stream-Q-ablation" --adaptive_step_size=0
+# sbatch train_q_network stream_q.py --env_name="CliffwalkEnv" --debug  --seed=985 --track=1 --tabular_env --wandb_project="Stream-Q-ablation" --adaptive_step_size=0
+
+
+# ## naive q learning with deep neural networks
+# sbatch train_q_network stream_q.py --env_name="MountainCar" --debug  --seed=1 --track=1 --tabular_env --use_sgd --lr=0.0001 --reward_rms=0 --layer_norm=0 --sparsity=0.0 --adaptive_step_size=0 --bound_delta=0 --eligibility_trace_lamda=0 --total_steps=10000000 --exploration_fraction=0.5 --wandb_project="Stream-Q-ablation"
+# sbatch train_q_network stream_q.py --env_name="InvertedPendulum" --debug  --seed=1 --track=1 --tabular_env --use_sgd --lr=0.0001 --reward_rms=0 --layer_norm=0 --sparsity=0.0 --adaptive_step_size=0 --bound_delta=0 --eligibility_trace_lamda=0 --wandb_project="Stream-Q-ablation"
+# sbatch train_q_network stream_q.py --env_name="CliffwalkEnv" --debug  --seed=1 --track=1 --tabular_env --use_sgd --lr=0.0001 --reward_rms=0 --layer_norm=0 --sparsity=0.0 --adaptive_step_size=0 --bound_delta=0 --eligibility_trace_lamda=0 --wandb_project="Stream-Q-ablation"
+
+
+# sbatch train_q_network stream_q.py --env_name="MountainCar" --debug  --seed=18950 --track=1 --tabular_env --use_sgd --lr=0.0001 --reward_rms=0 --layer_norm=0 --sparsity=0.0 --adaptive_step_size=0 --bound_delta=0 --eligibility_trace_lamda=0 --total_steps=10000000 --exploration_fraction=0.5 --wandb_project="Stream-Q-ablation"
+# sbatch train_q_network stream_q.py --env_name="InvertedPendulum" --debug  --seed=18950 --track=1 --tabular_env --use_sgd --lr=0.0001 --reward_rms=0 --layer_norm=0 --sparsity=0.0 --adaptive_step_size=0 --bound_delta=0 --eligibility_trace_lamda=0 --wandb_project="Stream-Q-ablation"
+# sbatch train_q_network stream_q.py --env_name="CliffwalkEnv" --debug  --seed=18950 --track=1 --tabular_env --use_sgd --lr=0.0001 --reward_rms=0 --layer_norm=0 --sparsity=0.0 --adaptive_step_size=0 --bound_delta=0 --eligibility_trace_lamda=0 --wandb_project="Stream-Q-ablation"
+
+
+# sbatch train_q_network stream_q.py --env_name="MountainCar" --debug  --seed=985 --track=1 --tabular_env --use_sgd --lr=0.0001 --reward_rms=0 --layer_norm=0 --sparsity=0.0 --adaptive_step_size=0 --bound_delta=0 --eligibility_trace_lamda=0 --total_steps=10000000 --exploration_fraction=0.5 --wandb_project="Stream-Q-ablation"
+# sbatch train_q_network stream_q.py --env_name="InvertedPendulum" --debug  --seed=985 --track=1 --tabular_env --use_sgd --lr=0.0001 --reward_rms=0 --layer_norm=0 --sparsity=0.0 --adaptive_step_size=0 --bound_delta=0 --eligibility_trace_lamda=0 --wandb_project="Stream-Q-ablation"
+# sbatch train_q_network stream_q.py --env_name="CliffwalkEnv" --debug  --seed=985 --track=1 --tabular_env --use_sgd --lr=0.0001 --reward_rms=0 --layer_norm=0 --sparsity=0.0 --adaptive_step_size=0 --bound_delta=0 --eligibility_trace_lamda=0 --wandb_project="Stream-Q-ablation"

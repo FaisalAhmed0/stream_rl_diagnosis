@@ -3,3 +3,5 @@ wandb
 run_tabular_q_learning
 .gitignore
 train
+data_stream_q_MiniGrid-Empty-16x16-v0_lr1.0_gamma0.99_lamda0.0
+data_stream_q_MiniGrid*

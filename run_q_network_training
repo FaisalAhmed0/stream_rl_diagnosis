@@ -1,0 +1,4 @@
+## orginal stream q learning
+sbatch train_q_network train_q_network.py --env_name="MountainCar" --debug  --seed=1 --track=1 --tabular_env 
+sbatch train_q_network train_q_network.py --env_name="InvertedPendulum" --debug  --seed=1 --track=1 --tabular_env 
+sbatch train_q_network train_q_network.py --env_name="CliffwalkEnv" --debug  --seed=1 --track=1 --tabular_env 

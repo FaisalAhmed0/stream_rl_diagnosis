@@ -125,8 +125,9 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_
         
     if track:
         wandb.init(
-            project="Stream_Q_Minigrid",
+            project="Stream_Q_Minigrid_2",
             mode="online",
+            entity="streaming-x-diagnosis",
             config=vars(args) if args else {},
             name=f"Stream Q(λ)_env_{env_name}_lambda_{lamda}_seed_{seed}"
         )

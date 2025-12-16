@@ -14,6 +14,28 @@ from typing import Optional, Tuple, Any, Dict
 
 # from main import q_learning
 
+def save_array(array, filepath):
+    """
+    Save a numpy array to a human-readable text file.
+    
+    Args:
+        array: numpy array to save
+        filepath: path to save the file (e.g., 'q_table.txt')
+    """
+    # Save shape information in a header comment
+    shape_str = ','.join(map(str, array.shape))
+    
+    # For 1D arrays, save directly
+    if array.ndim == 1:
+        np.savetxt(filepath, array, header=f'Shape: {shape_str}', comments='# ')
+    # For 2D arrays, save directly with shape info
+    elif array.ndim == 2:
+        np.savetxt(filepath, array, header=f'Shape: {shape_str}', comments='# ')
+    # For higher dimensional arrays, flatten and save with shape info
+    else:
+        flattened = array.flatten()
+        np.savetxt(filepath, flattened, header=f'Shape: {shape_str}', comments='# ')
+
 
 @dataclass
 class TimeStep:
@@ -175,6 +197,7 @@ class TabularEnv:
           corresponds to the probability of transitioning into state ns after taking
           action a from state s.
         """
+        print("Creating Transition matrix")
         ds = self.num_states
         da = self.num_actions
         transition_matrix = np.zeros((ds, da, ds))
@@ -193,6 +216,7 @@ class TabularEnv:
           reward given to an agent when transitioning into state ns after taking
           action s from state s.
         """
+        print("Creating reward matrix")
         ds = self.num_states
         da = self.num_actions
         rew_matrix = np.zeros((ds, da, ds))
@@ -620,7 +644,75 @@ class GymnasiumTabularWrapper(gymnasium.Env):
         return self.tabular_env.reward_matrix()
 
 
-# if __name__ == "__main__":
+
+def value_iteration(env: TabularEnv, gamma=0.99, theta=1e-6):
+    """
+    Finds the optimal Q-function using Value Iteration.
+    
+    Args:
+        env: An instance of TabularEnv.
+        gamma: Discount factor.
+        theta: Convergence threshold.
+        
+    Returns:
+        Q: Optimal action-value function matrix of shape (num_states, num_actions).
+    """
+    num_states = env.num_states
+    num_actions = env.num_actions
+    
+    # 1. Get the transition and reward models
+    # P[s, a, ns] is the probability of transitioning to ns from s via a
+    P = env.transition_matrix()
+    # R[s, a, ns] is the reward for transitioning from s to ns via a
+    R = env.reward_matrix()
+    
+    # Initialize state value function
+    V = np.zeros(num_states)
+    print("Started value iteration")
+    # 2. Value Iteration Loop (Finding V*)
+    while True:
+        delta = 0
+        print(f"num_states: {num_states}")
+        for s in range(num_states):
+            v_old = V[s]
+            
+            # Compute Q(s, a) for all actions in state s
+            # sum_{ns} P(ns|s,a) * [R(s,a,ns) + gamma * V(ns)]
+            q_s = np.zeros(num_actions)
+            for a in range(num_actions):
+                q_s[a] = np.sum(P[s, a, :] * (R[s, a, :] + gamma * V))
+            
+            # Bellman Optimality Equation: V(s) = max_a Q(s, a)
+            V[s] = np.max(q_s)
+            delta = max(delta, abs(v_old - V[s]))
+            
+        print(delta)
+        if delta < theta:
+            break
+            
+    # 3. Derive the optimal Q-function from V*
+    Q = np.zeros((num_states, num_actions))
+    for s in range(num_states):
+        for a in range(num_actions):
+            Q[s, a] = np.sum(P[s, a, :] * (R[s, a, :] + gamma * V))
+            
+    return Q
+
+if __name__ == "__main__":
+    # Initialize one of your environments
+    # env_name = "InvertedPendulum"
+    # env_name = "CliffwalkEnv"
+    env_name="MountainCar"
+    env = eval(env_name)()
+    
+    # Solve for optimal Q
+    optimal_q = value_iteration(env, gamma=0.9)
+    
+    # Example: Look at the best action for the first state
+    best_action_state_0 = np.argmax(optimal_q[0])
+    print(f"Optimal action in state 0: {best_action_state_0}")
+    print(f"Optimal Q-values for state 0: {optimal_q[0]}")
+    save_array(optimal_q, f"env_name_{env_name}_value_iteration.txt")
 #     # print("hello envs")
 #     env = MountainCar()
 #     env = GymnasiumTabularWrapper(env)

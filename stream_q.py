@@ -47,6 +47,54 @@ def evaluation(eval_env, q_function, num_evals=5, max_episode_steps=200):
                 break
         all_returns.append(sum_of_rewards)
     return np.mean(all_returns), np.std(all_returns)
+
+def evaluate_q_network(network, tabular_q_model, num_states, device="cpu", batch_size=1024 ,num_evals=5):
+    validation_losses = []
+    for _ in range(num_evals):
+        states = np.random.choice(num_states, size=batch_size)
+        states_onehot = F.one_hot(torch.tensor(states, device=device), num_classes=num_states).float()
+        target_values = torch.tensor(tabular_q_model[states], device=device, dtype=torch.float)
+        predicted_values = network.q(states_onehot)
+        loss = F.mse_loss(predicted_values, target_values)
+        validation_losses.append(loss.item())
+    return np.mean(validation_losses)
+
+
+def load_q_model(env_name, seed=1):
+    # print("load the file")
+    file_path = f"env_name_{env_name}_value_iteration.txt"
+    return load_array(file_path)
+    
+
+def load_array(filepath):
+    """
+    Load a numpy array from a human-readable text file.
+    
+    Args:
+        filepath: path to the file to load
+        
+    Returns:
+        numpy array with the original shape restored
+    """
+    shape = None
+    
+    # Read the file to get the shape from the header
+    with open(filepath, 'r') as f:
+        # Read first few lines to find shape info
+        for line in f:
+            if line.startswith('# Shape:'):
+                shape_str = line.replace('# Shape:', '').strip()
+                shape = tuple(map(int, shape_str.split(',')))
+                break
+    
+    # Load the data (skip comment lines)
+    data = np.loadtxt(filepath, comments='#')
+    
+    # Reshape if shape was specified
+    if shape is not None and data.size == np.prod(shape):
+        data = data.reshape(shape)
+    
+    return data
     
     
 
@@ -67,10 +115,10 @@ class StreamQ(nn.Module):
         self.fc1_v   = nn.Linear(n_obs, hidden_size)
         self.hidden_v  = nn.Linear(hidden_size, hidden_size)
         self.fc_v  = nn.Linear(hidden_size, n_actions)
-        self.apply(initialize_weights)
         if args.use_sgd:
             self.optimizer = torch.optim.SGD(list(self.parameters()), lr=lr)
         else:
+            self.apply(initialize_weights)
             self.optimizer = Optimizer(list(self.parameters()), lr=lr, gamma=gamma, lamda=args.eligibility_trace_lamda, kappa=kappa_value, adaptive_step_size=args.adaptive_step_size, bound_delta=args.bound_delta)
 
     def q(self, x):
@@ -146,11 +194,11 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_
         if args.reward_rms:
             env = ScaleReward(env, gamma=gamma)
         # env = NormalizeObservation(env)
-        env = AddTimeInfo(env)
+        # env = AddTimeInfo(env)
         eval_env = eval(env_name)()
         eval_env = GymnasiumTabularWrapper(eval_env)
         eval_env = gym.wrappers.RecordEpisodeStatistics(eval_env)
-        eval_env = AddTimeInfo(eval_env)
+        # eval_env = AddTimeInfo(eval_env)
     else:
         env = gym.make(env_name, render_mode='human', max_episode_steps=10_000) if render else gym.make(env_name, max_episode_steps=10_000)
         env = gym.wrappers.FlattenObservation(env)
@@ -159,11 +207,12 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_
         env = NormalizeObservation(env)
         env = AddTimeInfo(env)
     agent = StreamQ(n_obs=env.observation_space.shape[0], n_actions=env.action_space.n, lr=lr, gamma=gamma, lamda=lamda, epsilon_target=epsilon_target, epsilon_start=epsilon_start, exploration_fraction=exploration_fraction, total_steps=total_steps, kappa_value=kappa_value, layer_norm=layer_norm, args=args)
+    eval_agent = StreamQ(n_obs=env.observation_space.shape[0], n_actions=env.action_space.n, lr=lr, gamma=gamma, lamda=lamda, epsilon_target=epsilon_target, epsilon_start=epsilon_start, exploration_fraction=exploration_fraction, total_steps=total_steps, kappa_value=kappa_value, layer_norm=layer_norm, args=args)
     if debug:
         print("seed: {}".format(seed), "env: {}".format(env.spec.id))
     if track:
         wandb.init(
-            project="Stream Q(λ)_tabular_envs",
+            project=args.wandb_project,
             mode="online",
             config=vars(args),
             name=f"Stream Q(λ)_env_name_{env_name}_seed_{seed}_sparsity_{args.sparsity}_layer_norm_{args.layer_norm}_reward_rms_{args.reward_rms}_adaptive_step_size_{args.adaptive_step_size}_bound_delta_{args.bound_delta}_eligibility_trace_lamda_{args.eligibility_trace_lamda}_use_sgd_{args.use_sgd}",
@@ -172,6 +221,7 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_
     returns, term_time_steps = [], []
     s, _ = env.reset(seed=seed)
     episode_num = 1
+    tabular_q_model = load_q_model(env_name, seed)
     for t in range(1, total_steps+1):
         a, is_nongreedy = agent.sample_action(s)
         s_prime, r, terminated, truncated, info = env.step(a)
@@ -196,9 +246,12 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_
         if t % args.eval_freq == 0:
             with torch.no_grad():
                 eval_return, eval_std = evaluation(eval_env, agent.q, num_evals=5, max_episode_steps=200)
+                eval_agent.load_state_dict(agent.state_dict())
+                validation_loss = evaluate_q_network(eval_agent.to("cuda"), tabular_q_model, num_states=tabular_q_model.shape[0], device="cuda", batch_size=1024, num_evals=1)
             eval_logs = {
                 "eval/eval_return": eval_return,
-                "eval/eval_std": eval_std
+                "eval/eval_std": eval_std, 
+                "eval/validation_loss": validation_loss,
             }
             if args.env_name in Expert_returns:
                 eval_logs["eval/eval_normalized_return"] = eval_return/Expert_returns[env_name]
@@ -220,6 +273,7 @@ def main(env_name, seed, lr, gamma, lamda, total_steps, epsilon_target, epsilon_
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Stream Q(λ)')
     parser.add_argument('--env_name', type=str, default='CartPole-v1')
+    parser.add_argument('--wandb_project', type=str, default='CartPole-v1')
     parser.add_argument('--tabular_env', action='store_true')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--lr', type=float, default=1.0)
