@@ -18,9 +18,6 @@ for h in 32 128 512; do
         --seed "${seed}" \
         --hidden_size "${h}" \
         --num_layers "${nl}" \
-        --lr 1.0 \
-        --gamma 0.99 \
-        --lamda 0.8 \
         --total_steps 500000
     done
   done
@@ -35,10 +32,6 @@ for h in 64 128 256; do
         --seed "${seed}" \
         --hidden_size "${h}" \
         --num_layers "${nl}" \
-        --lr 1.0 \
-        --gamma 0.99 \
-        --lamda 0.8 \
-        --entropy_coeff 0.01 \
         --total_steps 500000
     done
   done
